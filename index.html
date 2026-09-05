@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D Horror RPG - Multiplayer & Live Chat</title>
+    <title>Barangay 3D Horror RPG - Smooth Multiplayer</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
@@ -90,7 +90,6 @@
         <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Full Light</span> | [R] Rotate | [Click] Place</div>
     </div>
 
-    <!-- LIVE CHAT BOX -->
     <div id="chat-container">
         <div id="chat-messages"></div>
         <div id="chat-input-container">
@@ -100,7 +99,7 @@
     </div>
 
     <div id="crosshair">+</div>
-    <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon | ENTER: Chat</small></div>
+    <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon | F: Flashlight | ENTER: Chat</small></div>
 
     <script>
         const firebaseConfig = {
@@ -174,14 +173,14 @@
             start3DGame();
         }
 
-        // --- GAME & MULTIPLAYER ENGINE ---
+        // --- GAME & ENGINE VARIABLES ---
         let scene, camera, renderer, flashlight, flashlightTarget, adminAmbientLight;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isSprinting = false;
         let canJump = true, velocityY = 0, gravity = -18.0, stamina = 100;
         let prevTime = performance.now(), yaw = 0, pitch = 0, isPointerLocked = false;
 
-        let isBuildMode = false, isAdminLightOn = false, selectedItemType = 1, previewMesh = null, buildRotation = 0;
-        let otherPlayers = {}; // Object for tracking remote 3D player models
+        let isBuildMode = false, isAdminLightOn = false, isFlashlightOn = true, selectedItemType = 1, previewMesh = null, buildRotation = 0;
+        let otherPlayers = {}; // Stores player mesh and target positions for smooth lerp
         let lastPositionSync = 0;
 
         function start3DGame() {
@@ -213,24 +212,26 @@
             adminAmbientLight.position.set(0, 50, 0);
             scene.add(adminAmbientLight);
 
-            flashlight = new THREE.SpotLight(0xfffae6, 7, 30, Math.PI / 4.5, 0.4, 1);
+            // ACCURATE CENTERED FLASHLIGHT
+            flashlight = new THREE.SpotLight(0xfffae6, 8, 35, Math.PI / 5, 0.3, 1);
             flashlightTarget = new THREE.Object3D();
             scene.add(flashlightTarget);
             flashlight.target = flashlightTarget;
+            
+            // Attach flashlight directly to camera eye position
             camera.add(flashlight);
-            flashlight.position.set(0.2, -0.2, 0);
+            flashlight.position.set(0, 0, 0);
             scene.add(camera);
 
             createPhilippineTerrain();
             generateDefaultSquattersArea();
             loadSavedStructures();
 
-            // Real-Time Multiplayer Syncing
             listenToOnlinePlayers();
             listenToChatMessages();
 
             document.body.addEventListener('click', (e) => {
-                if (e.target.closest('#chat-container')) return; // Allow clicking chat
+                if (e.target.closest('#chat-container')) return;
                 if (!isPointerLocked) {
                     document.body.requestPointerLock();
                 } else if (isAdmin && isBuildMode && previewMesh) {
@@ -253,8 +254,9 @@
                 camera.rotation.y = yaw;
                 camera.rotation.x = pitch;
 
+                // Lock Flashlight Beam Exactly To Center Crosshair
                 const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                flashlightTarget.position.copy(camera.position).add(dir);
+                flashlightTarget.position.copy(camera.position).add(dir.multiplyScalar(10));
             });
 
             window.addEventListener('keydown', (e) => onKey(e.code, true));
@@ -264,61 +266,53 @@
             animate();
         }
 
-        // --- REALTIME MULTIPLAYER PLAYER SYNC ---
-        function listenToOnlinePlayers() {
-            db.collection('online_players').onSnapshot(snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    const id = change.doc.id;
-                    const data = change.doc.data();
-
-                    if (id === currentUserUid) return; // Skip own character
-
-                    if (change.type === "added" || change.type === "modified") {
-                        if (!otherPlayers[id]) {
-                            // Create 3D Avatar Model for foreign player
-                            const avatar = createPlayerAvatarMesh(data.username, data.gender);
-                            scene.add(avatar);
-                            otherPlayers[id] = avatar;
-                        }
-                        // Update player coordinates and rotation smoothly
-                        otherPlayers[id].position.set(data.x, data.y - 1.7, data.z);
-                        otherPlayers[id].rotation.y = data.rotationY || 0;
-                    }
-
-                    if (change.type === "removed") {
-                        if (otherPlayers[id]) {
-                            scene.remove(otherPlayers[id]);
-                            delete otherPlayers[id];
-                        }
-                    }
-                });
-            });
-
-            // Clean up player state on window unload
-            window.addEventListener('beforeunload', () => {
-                if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
-            });
-        }
-
+        // --- DETAILED HUMANOID CHARACTER CREATOR ---
         function createPlayerAvatarMesh(username, gender) {
             const group = new THREE.Group();
-            
-            // Body Mesh (Blue for Boy, Pink for Girl)
-            const color = gender === "Girl" ? 0xec4899 : 0x3b82f6;
-            const bodyGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.4);
-            const bodyMat = new THREE.MeshStandardMaterial({ color: color });
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            body.position.y = 0.7;
-            group.add(body);
 
-            // Head Mesh
-            const headGeo = new THREE.SphereGeometry(0.25, 16, 16);
-            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
-            const head = new THREE.Mesh(headGeo, headMat);
-            head.position.y = 1.6;
+            const isBoy = (gender === "Boy");
+            const shirtColor = isBoy ? 0x2563eb : 0xec4899; // Blue or Pink shirt
+            const pantsColor = isBoy ? 0x1e293b : 0x334155; // Dark pants
+
+            const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor });
+            const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor });
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac }); // Skin tone
+
+            // Torso (Katawan)
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.65, 0.28), shirtMat);
+            torso.position.y = 1.05;
+            group.add(torso);
+
+            // Head (Ulo)
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skinMat);
+            head.position.y = 1.52;
             group.add(head);
 
-            // Name Tag Canvas Sprite above Head
+            // Hair (Buhok)
+            const hairMat = new THREE.MeshStandardMaterial({ color: 0x1c1917 });
+            const hair = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.42), hairMat);
+            hair.position.y = 1.68;
+            group.add(hair);
+
+            // Arms (Mga Kamay)
+            const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.12), skinMat);
+            armL.position.set(-0.33, 1.05, 0);
+            group.add(armL);
+
+            const armR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.12), skinMat);
+            armR.position.set(0.33, 1.05, 0);
+            group.add(armR);
+
+            // Legs (Mga Paa)
+            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.18), pantsMat);
+            legL.position.set(-0.14, 0.35, 0);
+            group.add(legL);
+
+            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.18), pantsMat);
+            legR.position.set(0.14, 0.35, 0);
+            group.add(legR);
+
+            // Name Tag Floating Sprite
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
             const ctx = canvas.getContext('2d');
@@ -330,13 +324,51 @@
             ctx.fillText(username, 128, 42);
 
             const texture = new THREE.CanvasTexture(canvas);
-            const spriteMat = new THREE.SpriteMaterial({ map: texture });
-            const sprite = new THREE.Sprite(spriteMat);
-            sprite.position.y = 2.2;
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+            sprite.position.y = 2.0;
             sprite.scale.set(2, 0.5, 1);
             group.add(sprite);
 
             return group;
+        }
+
+        // --- REALTIME MULTIPLAYER WITH LERP SMOOTHING ---
+        function listenToOnlinePlayers() {
+            db.collection('online_players').onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    const id = change.doc.id;
+                    const data = change.doc.data();
+
+                    if (id === currentUserUid) return; // Ignore local player
+
+                    if (change.type === "added" || change.type === "modified") {
+                        if (!otherPlayers[id]) {
+                            const avatar = createPlayerAvatarMesh(data.username, data.gender);
+                            scene.add(avatar);
+                            otherPlayers[id] = {
+                                mesh: avatar,
+                                targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
+                                targetRotY: data.rotationY || 0
+                            };
+                        } else {
+                            // Update target coordinates for smooth interpolation
+                            otherPlayers[id].targetPos.set(data.x, data.y - 1.7, data.z);
+                            otherPlayers[id].targetRotY = data.rotationY || 0;
+                        }
+                    }
+
+                    if (change.type === "removed") {
+                        if (otherPlayers[id]) {
+                            scene.remove(otherPlayers[id].mesh);
+                            delete otherPlayers[id];
+                        }
+                    }
+                });
+            });
+
+            window.addEventListener('beforeunload', () => {
+                if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
+            });
         }
 
         function broadcastPlayerPosition() {
@@ -380,7 +412,7 @@
             });
         }
 
-        // --- REALISTIC PINOY TERRAIN & ROAD ---
+        // --- TERRAIN & ENVIRONMENT ---
         function createPhilippineTerrain() {
             const roadGeo = new THREE.PlaneGeometry(8, 200);
             const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f1f22, roughness: 0.9 });
@@ -521,13 +553,19 @@
                 return;
             }
 
-            if (isChatActive) return; // Block game controls while typing
+            if (isChatActive) return; 
 
             if (code === 'KeyW') moveForward = state;
             if (code === 'KeyS') moveBackward = state;
             if (code === 'KeyA') moveLeft = state;
             if (code === 'KeyD') moveRight = state;
             if (code === 'ShiftLeft') isSprinting = state;
+
+            // FLASHLIGHT ON/OFF TOGGLE (F Key)
+            if (code === 'KeyF' && state) {
+                isFlashlightOn = !isFlashlightOn;
+                flashlight.intensity = isFlashlightOn ? 8 : 0;
+            }
 
             if (code === 'Space' && state && canJump) {
                 velocityY = 6.5;
@@ -603,11 +641,18 @@
                     previewMesh.position.set(targetPos.x, 0, targetPos.z);
                 }
 
-                // Broadcast player position to Database every 100ms
-                if (time - lastPositionSync > 100) {
+                // Sync Player Position Every 80ms
+                if (time - lastPositionSync > 80) {
                     broadcastPlayerPosition();
                     lastPositionSync = time;
                 }
+            }
+
+            // SMOOTH LERP INTERPOLATION FOR REMOTE PLAYERS
+            for (let id in otherPlayers) {
+                const p = otherPlayers[id];
+                p.mesh.position.lerp(p.targetPos, 0.15); // Smooth linear movement
+                p.mesh.rotation.y += (p.targetRotY - p.mesh.rotation.y) * 0.15;
             }
 
             renderer.render(scene, camera);
