@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D RPG - Real Anime Models</title>
+    <title>Barangay 3D RPG - Province Terrain</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
@@ -43,7 +43,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- GLTF LOADER PARA SA REAL 3D ANIME MODELS -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
@@ -60,7 +59,7 @@
     </div>
 
     <div id="story-screen">
-        <h2 style="color: #e53e3e; margin-bottom: 15px;">Pumili ng Anime Character</h2>
+        <h2 style="color: #e53e3e; margin-bottom: 15px;">Pumili ng Character</h2>
         <div class="char-container">
             <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
                 <img src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png" alt="Boy">
@@ -83,18 +82,18 @@
     </div>
 
     <div id="build-menu">
-        <div style="margin-bottom: 5px; color: #ef4444; font-weight: bold;">SKWATERS AREA BUILDER</div>
+        <div style="margin-bottom: 5px; color: #ef4444; font-weight: bold;">PROVINCE MAP BUILDER</div>
         <span class="build-item active" id="item-1">[1] Curved Streetlight</span>
-        <span class="build-item" id="item-2">[2] Skwaters House (Yero)</span>
-        <span class="build-item" id="item-3">[3] Concrete Double House</span>
-        <span class="build-item" id="item-4">[4] Posteng Kawayan/Puno</span>
+        <span class="build-item" id="item-2">[2] Bahay Kubo / House</span>
+        <span class="build-item" id="item-3">[3] Concrete Structure</span>
+        <span class="build-item" id="item-4">[4] Puno / Kawayan</span>
         <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Light</span> | [R] Rotate | [Click] Place</div>
     </div>
 
     <div id="chat-container">
         <div id="chat-messages"></div>
         <div id="chat-input-container">
-            <input type="text" id="chat-input" placeholder="Type a message... (Press Enter)" onfocus="isChatActive=true" onblur="isChatActive=false">
+            <input type="text" id="chat-input" placeholder="Type a message..." onfocus="isChatActive=true" onblur="isChatActive=false">
             <button id="chat-send" onclick="sendChatMessage()">Send</button>
         </div>
     </div>
@@ -183,7 +182,6 @@
         let lastPositionSync = 0;
         let gltfLoader = new THREE.GLTFLoader();
 
-        // High Quality Anime Avatar Model URL (VRoid/Anime Standard GLTF Mesh)
         const ANIME_MODEL_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/RobotExpressive/RobotExpressive.glb'; 
 
         function start3DGame() {
@@ -194,25 +192,28 @@
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x02040a); 
-            scene.fog = new THREE.FogExp2(0x02040a, 0.03);
+            scene.fog = new THREE.FogExp2(0x02040a, 0.025);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.7, 10);
+            
+            // Set initial camera position on top of the terrain
+            const startY = getTerrainHeight(0, 0) + 1.7;
+            camera.position.set(0, startY, 0);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const moonLight = new THREE.DirectionalLight(0x1e293b, 0.5);
-            moonLight.position.set(20, 40, 20);
+            const moonLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
+            moonLight.position.set(50, 80, 50);
             scene.add(moonLight);
 
-            const ambient = new THREE.AmbientLight(0x475569, 1.0);
+            const ambient = new THREE.AmbientLight(0x1e293b, 1.2);
             scene.add(ambient);
 
             adminAmbientLight = new THREE.DirectionalLight(0xffffff, 0);
-            adminAmbientLight.position.set(0, 50, 0);
+            adminAmbientLight.position.set(0, 80, 0);
             scene.add(adminAmbientLight);
 
             flashlight = new THREE.SpotLight(0xfffae6, 8, 35, Math.PI / 5, 0.3, 1);
@@ -224,8 +225,10 @@
             flashlight.position.set(0, 0, 0);
             scene.add(camera);
 
-            createPhilippineTerrain();
-            generateDefaultSquattersArea();
+            // CREATE PROVINCE TERRAIN (BUNDOK AT ROLLING HILLS)
+            createProvinceTerrain();
+            
+            // INALIS MUNA ANG AUTOMATIC SQUATTERS HOUSES
             loadSavedStructures();
 
             listenToOnlinePlayers();
@@ -266,11 +269,46 @@
             animate();
         }
 
-        // --- REAL 3D ANIME MODEL LOADER WITH SMOOTH SKELETON ANIMATIONS ---
+        // --- PROVINCE TERRAIN HEIGHT FORMULA (BUNDOK) ---
+        function getTerrainHeight(x, z) {
+            // Complex Sine Wave / Noise para sa Hills & Mountains
+            let height = Math.sin(x * 0.03) * Math.cos(z * 0.03) * 6.0;
+            height += Math.sin(x * 0.08 + z * 0.05) * 2.5;
+            height += Math.cos(x * 0.015) * Math.sin(z * 0.015) * 12.0; // Bagong maliit na bundok
+            return height;
+        }
+
+        function createProvinceTerrain() {
+            const size = 300;
+            const segments = 120;
+            const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+            geo.rotateX(-Math.PI / 2);
+
+            const pos = geo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                pos.setY(i, getTerrainHeight(x, z));
+            }
+
+            geo.computeVertexNormals();
+
+            // Grass/Soil Grass Material para sa Probinsya
+            const terrainMat = new THREE.MeshStandardMaterial({
+                color: 0x1c3d21, // Deep Grass Green
+                roughness: 0.95,
+                metalness: 0.05,
+                flatShading: true
+            });
+
+            const terrain = new THREE.Mesh(geo, terrainMat);
+            scene.add(terrain);
+        }
+
+        // --- REAL 3D ANIME MODEL LOADER ---
         function loadRealAnimeCharacter(username, gender, callback) {
             const playerGroup = new THREE.Group();
 
-            // Name Tag
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
             const ctx = canvas.getContext('2d');
@@ -287,16 +325,12 @@
             sprite.scale.set(2, 0.5, 1);
             playerGroup.add(sprite);
 
-            // Load External 3D GLTF Model Mesh
             gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
                 const model = gltf.scene;
                 model.scale.set(0.4, 0.4, 0.4);
-                
-                // Rotated 180 degrees to face moving direction properly
                 model.rotation.y = Math.PI; 
                 playerGroup.add(model);
 
-                // Setup Skeletal Animation Mixer
                 const mixer = new THREE.AnimationMixer(model);
                 const clips = gltf.animations;
 
@@ -312,12 +346,10 @@
                     walkAction: walkAction,
                     isMoving: false
                 });
-            }, undefined, (err) => {
-                console.error("Error loading GLTF Model:", err);
             });
         }
 
-        // --- MULTIPLAYER REALTIME PLAYER SYNC ---
+        // --- MULTIPLAYER ---
         function listenToOnlinePlayers() {
             db.collection('online_players').onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(change => {
@@ -402,80 +434,8 @@
             });
         }
 
-        // --- MAP & BUILD ENGINE ---
-        function createPhilippineTerrain() {
-            const roadGeo = new THREE.PlaneGeometry(8, 200);
-            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f1f22, roughness: 0.9 });
-            const road = new THREE.Mesh(roadGeo, roadMat);
-            road.rotation.x = -Math.PI / 2;
-            scene.add(road);
-
-            const curbMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.8 });
-            const leftCurb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 200), curbMat);
-            leftCurb.position.set(-4.3, 0.1, 0);
-            scene.add(leftCurb);
-
-            const rightCurb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 200), curbMat);
-            rightCurb.position.set(4.3, 0.1, 0);
-            scene.add(rightCurb);
-
-            const dirtGeo = new THREE.PlaneGeometry(120, 200);
-            const dirtMat = new THREE.MeshStandardMaterial({ color: 0x0c0d0e, roughness: 1.0 });
-            const dirt = new THREE.Mesh(dirtGeo, dirtMat);
-            dirt.rotation.x = -Math.PI / 2;
-            dirt.position.y = -0.01;
-            scene.add(dirt);
-        }
-
-        function generateDefaultSquattersArea() {
-            for(let z = -80; z <= 80; z += 12) {
-                if(Math.abs(z) < 8) continue;
-                const houseL = createSquattersHouseMesh();
-                houseL.position.set(-7.5 - Math.random()*2, 0, z);
-                houseL.rotation.y = Math.PI / 2;
-                scene.add(houseL);
-
-                const houseR = createSquattersHouseMesh();
-                houseR.position.set(7.5 + Math.random()*2, 0, z + 4);
-                houseR.rotation.y = -Math.PI / 2;
-                scene.add(houseR);
-
-                if(z % 24 === 0) {
-                    const light = createStructureMesh(1, false);
-                    light.position.set(-4.1, 0, z);
-                    scene.add(light);
-                }
-            }
-        }
-
-        function createSquattersHouseMesh(isPreview = false) {
-            const group = new THREE.Group();
-            let op = isPreview ? 0.5 : 1.0;
-
-            const baseMat = new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x475569 : 0x334155, roughness: 0.9, transparent: isPreview, opacity: op });
-            const base = new THREE.Mesh(new THREE.BoxGeometry(5, 2.5, 4), baseMat);
-            base.position.y = 1.25;
-            group.add(base);
-
-            const yeroMat = new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x78350f : 0x1e293b, metalness: 0.6, roughness: 0.5, transparent: isPreview, opacity: op });
-            const roof = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.15, 4.4), yeroMat);
-            roof.position.set(0, 2.55, 0);
-            roof.rotation.z = (Math.random() - 0.5) * 0.1;
-            group.add(roof);
-
-            const door = new THREE.Mesh(new THREE.BoxGeometry(1, 1.8, 0.1), new THREE.MeshStandardMaterial({ color: 0x1c1917 }));
-            door.position.set(1, 0.9, 2.01);
-            group.add(door);
-
-            const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
-            win.position.set(-1.2, 1.5, 2.01);
-            group.add(win);
-
-            return group;
-        }
-
+        // --- BUILD MESHES ---
         function createStructureMesh(type, isPreview = false) {
-            if (type === 2) return createSquattersHouseMesh(isPreview);
             const group = new THREE.Group();
             let op = isPreview ? 0.5 : 1.0;
 
@@ -484,29 +444,32 @@
                 const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 4.8), poleMat);
                 pole.position.y = 2.4; group.add(pole);
 
-                const curve = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.06, 8, 16, Math.PI / 2), poleMat);
-                curve.position.set(0.6, 4.7, 0); curve.rotation.z = Math.PI / 2; group.add(curve);
-
                 const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.1, 0.15), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-                lamp.position.set(1.3, 4.6, 0); group.add(lamp);
+                lamp.position.set(0.8, 4.6, 0); group.add(lamp);
 
                 if (!isPreview) {
                     const spot = new THREE.SpotLight(0xfff5c0, 8, 16, Math.PI / 3, 0.5, 1);
-                    spot.position.set(1.3, 4.5, 0);
-                    const target = new THREE.Object3D();
-                    target.position.set(1.3, 0, 0);
-                    group.add(target);
-                    spot.target = target;
+                    spot.position.set(0.8, 4.5, 0);
                     group.add(spot);
                 }
+            } else if (type === 2) { // Bahay Kubo
+                const baseMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9, transparent: isPreview, opacity: op });
+                const base = new THREE.Mesh(new THREE.BoxGeometry(4, 2.2, 3.5), baseMat);
+                base.position.y = 1.1; group.add(base);
+
+                const roofMat = new THREE.MeshStandardMaterial({ color: 0xa16207, roughness: 1.0, transparent: isPreview, opacity: op });
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 1.8, 4), roofMat);
+                roof.position.y = 3.0; roof.rotation.y = Math.PI / 4; group.add(roof);
             } else if (type === 3) {
-                const h1 = createSquattersHouseMesh(isPreview);
-                const h2 = createSquattersHouseMesh(isPreview);
-                h2.position.set(0, 2.5, 0);
-                group.add(h1); group.add(h2);
+                const box = new THREE.Mesh(new THREE.BoxGeometry(4, 3, 4), new THREE.MeshStandardMaterial({ color: 0x475569, transparent: isPreview, opacity: op }));
+                box.position.y = 1.5; group.add(box);
             } else if (type === 4) {
-                const tree = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5), new THREE.MeshStandardMaterial({ color: 0x291d0e, transparent: isPreview, opacity: op }));
+                const treeMat = new THREE.MeshStandardMaterial({ color: 0x291d0e, transparent: isPreview, opacity: op });
+                const tree = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5), treeMat);
                 tree.position.y = 2.5; group.add(tree);
+
+                const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.5, 8, 8), new THREE.MeshStandardMaterial({ color: 0x15803d, transparent: isPreview, opacity: op }));
+                leaves.position.y = 4.5; group.add(leaves);
             }
             return group;
         }
@@ -519,7 +482,8 @@
         }
 
         async function placeStructure() {
-            await db.collection('world_map').add({ type: selectedItemType, x: previewMesh.position.x, z: previewMesh.position.z, rotY: previewMesh.rotation.y });
+            const groundY = getTerrainHeight(previewMesh.position.x, previewMesh.position.z);
+            await db.collection('world_map').add({ type: selectedItemType, x: previewMesh.position.x, y: groundY, z: previewMesh.position.z, rotY: previewMesh.rotation.y });
         }
 
         function loadSavedStructures() {
@@ -528,7 +492,8 @@
                     if (change.type === "added") {
                         const data = change.doc.data();
                         const obj = createStructureMesh(data.type, false);
-                        obj.position.set(data.x, 0, data.z);
+                        const posY = data.y !== undefined ? data.y : getTerrainHeight(data.x, data.z);
+                        obj.position.set(data.x, posY, data.z);
                         obj.rotation.y = data.rotY;
                         scene.add(obj);
                     }
@@ -564,7 +529,7 @@
             if (isAdmin && code === 'KeyL' && state) {
                 isAdminLightOn = !isAdminLightOn;
                 adminAmbientLight.intensity = isAdminLightOn ? 1.8 : 0;
-                scene.fog.density = isAdminLightOn ? 0.005 : 0.03;
+                scene.fog.density = isAdminLightOn ? 0.005 : 0.025;
             }
 
             if (isAdmin && code === 'KeyB' && state) {
@@ -606,14 +571,7 @@
                 else stamina = Math.min(100, stamina + delta * 15);
                 document.getElementById('stamina-bar').style.width = stamina + "%";
 
-                camera.position.y += velocityY * delta;
-                velocityY += gravity * delta;
-                if (camera.position.y <= 1.7) {
-                    camera.position.y = 1.7;
-                    velocityY = 0;
-                    canJump = true;
-                }
-
+                // Movement Logic with Terrain Elevation
                 const dir = new THREE.Vector3();
                 if (moveForward) dir.z -= 1;
                 if (moveBackward) dir.z += 1;
@@ -624,10 +582,24 @@
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
                 camera.position.addScaledVector(dir, speed * delta);
 
+                // Terrain Elevation Check
+                const currentGroundY = getTerrainHeight(camera.position.x, camera.position.z);
+                const targetCameraY = currentGroundY + 1.7;
+
+                camera.position.y += velocityY * delta;
+                velocityY += gravity * delta;
+
+                if (camera.position.y <= targetCameraY) {
+                    camera.position.y = targetCameraY;
+                    velocityY = 0;
+                    canJump = true;
+                }
+
                 if (isAdmin && isBuildMode && previewMesh) {
                     const frontDir = new THREE.Vector3(0, 0, -5).applyQuaternion(camera.quaternion);
                     const targetPos = camera.position.clone().add(frontDir);
-                    previewMesh.position.set(targetPos.x, 0, targetPos.z);
+                    const buildGroundY = getTerrainHeight(targetPos.x, targetPos.z);
+                    previewMesh.position.set(targetPos.x, buildGroundY, targetPos.z);
                 }
 
                 if (time - lastPositionSync > 80) {
@@ -636,7 +608,7 @@
                 }
             }
 
-            // ANIMATION MIXER UPDATE FOR ONLINE PLAYERS
+            // ANIMATION MIXER & POSITIONS FOR MULTIPLAYER
             for (let id in otherPlayers) {
                 const p = otherPlayers[id];
 
