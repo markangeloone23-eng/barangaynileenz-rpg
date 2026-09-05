@@ -1,106 +1,4 @@
-<!DOCTYPE html>
-<html lang="tl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D RPG - Province Terrain</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
-        
-        .auth-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); padding: 30px; border-radius: 12px; width: 380px; text-align: center; border: 2px solid #9b2c2c; z-index: 100; }
-        .auth-container h2 { margin-bottom: 15px; color: #e53e3e; }
-        .auth-container input, .auth-container button { width: 100%; padding: 10px; margin: 6px 0; border-radius: 6px; border: none; }
-        .auth-container input { background: #1f2937; color: white; border: 1px solid #374151; }
-        .auth-container button { background: #9b2c2c; color: white; font-weight: bold; cursor: pointer; }
-
-        #story-screen { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); padding: 30px; border-radius: 12px; width: 550px; text-align: center; border: 2px solid #9b2c2c; z-index: 100; }
-        .char-container { display: flex; justify-content: center; gap: 20px; margin: 20px 0; }
-        .char-card { background: #1e293b; border: 2px solid #475569; border-radius: 10px; padding: 15px; cursor: pointer; width: 160px; }
-        .char-card.selected { border-color: #e53e3e; background: #0f172a; }
-        .char-card img { width: 80px; height: 80px; }
-
-        #ui-layer { display: none; position: absolute; top: 0; left: 0; width: 100%; padding: 15px 25px; justify-content: space-between; align-items: center; z-index: 10; pointer-events: none; background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent); }
-        #crosshair { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.8); font-size: 24px; pointer-events: none; z-index: 10; font-weight: bold; }
-        #click-prompt { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #f87171; padding: 12px 24px; border-radius: 8px; border: 1px solid #e53e3e; pointer-events: none; z-index: 10; font-weight: bold; text-align: center; }
-        
-        #build-menu { display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.95); padding: 12px 20px; border-radius: 8px; border: 2px solid #ef4444; z-index: 15; text-align: center; }
-        .build-item { display: inline-block; padding: 6px 12px; margin: 0 4px; background: #1e293b; border: 1px solid #475569; border-radius: 4px; font-size: 12px; }
-        .build-item.active { border-color: #ef4444; background: #9b2c2c; font-weight: bold; }
-        #admin-badge { display: none; background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; font-weight: bold; }
-        #stamina-container { width: 160px; height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 6px; border: 1px solid #475569; }
-        #stamina-bar { width: 100%; height: 100%; background: #eab308; }
-
-        #chat-container { display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; height: 200px; background: rgba(15, 23, 42, 0.85); border: 1px solid #374151; border-radius: 8px; z-index: 20; padding: 10px; display: flex; flex-direction: column; pointer-events: auto; }
-        #chat-messages { flex: 1; overflow-y: auto; font-size: 13px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
-        #chat-messages div { word-wrap: break-word; }
-        #chat-input-container { display: flex; gap: 5px; }
-        #chat-input { flex: 1; background: #1f2937; border: 1px solid #4b5563; color: white; padding: 6px; border-radius: 4px; font-size: 12px; }
-        #chat-send { background: #9b2c2c; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
-    </style>
-
-    <!-- SUPABASE & THREE.JS LIBRARIES -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-</head>
-<body>
-
-    <div id="auth-screen" class="auth-container">
-        <h2 id="auth-title">BARANGAY 3D HORROR</h2>
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <div id="register-fields" style="display: none;">
-            <input type="text" id="username" placeholder="Username">
-        </div>
-        <button id="auth-btn" onclick="handleAuth()">LOGIN</button>
-        <button class="toggle-btn" style="background:transparent; color:#aaa; text-decoration:underline; cursor:pointer;" onclick="toggleAuthMode()">Register</button>
-    </div>
-
-    <div id="story-screen">
-        <h2 style="color: #e53e3e; margin-bottom: 15px;">Pumili ng Character</h2>
-        <div class="char-container">
-            <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
-                <img src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png" alt="Boy">
-                <p>Aether (Boy)</p>
-            </div>
-            <div class="char-card" id="card-girl" onclick="selectGender('Girl')">
-                <img src="https://cdn-icons-png.flaticon.com/512/4140/4140047.png" alt="Girl">
-                <p>Lumine (Girl)</p>
-            </div>
-        </div>
-        <button class="start-btn" style="background:#9b2c2c; color:white; padding:10px 20px; border:none; cursor:pointer;" onclick="confirmCharacterSelection()">MAGSIMULA</button>
-    </div>
-
-    <div id="ui-layer">
-        <div>
-            <div><strong>Player:</strong> <span id="display-name" style="color: #fca5a5;">User</span> <span id="admin-badge">ADMIN</span> | <strong>Pera:</strong> ₱<span id="display-money" style="color: #fef08a;">600</span></div>
-            <div id="stamina-container"><div id="stamina-bar"></div></div>
-        </div>
-        <button onclick="logout()" style="background: #9b2c2c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; pointer-events: auto;">Logout</button>
-    </div>
-
-    <div id="build-menu">
-        <div style="margin-bottom: 5px; color: #ef4444; font-weight: bold;">PROVINCE MAP BUILDER</div>
-        <span class="build-item active" id="item-1">[1] Curved Streetlight</span>
-        <span class="build-item" id="item-2">[2] Bahay Kubo / House</span>
-        <span class="build-item" id="item-3">[3] Concrete Structure</span>
-        <span class="build-item" id="item-4">[4] Puno / Kawayan</span>
-        <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Light</span> | [R] Rotate | [Click] Place</div>
-    </div>
-
-    <div id="chat-container">
-        <div id="chat-messages"></div>
-        <div id="chat-input-container">
-            <input type="text" id="chat-input" placeholder="Type a message..." onfocus="isChatActive=true" onblur="isChatActive=false">
-            <button id="chat-send" onclick="sendChatMessage()">Send</button>
-        </div>
-    </div>
-
-    <div id="crosshair">+</div>
-    <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon | F: Flashlight | ENTER: Chat</small></div>
-
-    <script>
+<script>
         // --- SUPABASE CONFIGURATION ---
         const SUPABASE_URL = "https://nivabepmcadfnkwoklmi.supabase.co";
         const SUPABASE_ANON_KEY = "sb_publishable_nH139K1f23A9YOPSAd0hNg_adIpQHMO";
@@ -174,6 +72,11 @@
         let canJump = true, velocityY = 0, gravity = -18.0, stamina = 100;
         let prevTime = performance.now(), yaw = 0, pitch = 0, isPointerLocked = false;
 
+        // --- PLAYER & CAMERA CONTROLS ---
+        let playerGroup = new THREE.Group();
+        let isThirdPerson = true; 
+        const cameraOffset = new THREE.Vector3(0, 2.2, 3.8);
+
         let isBuildMode = false, isAdminLightOn = false, isFlashlightOn = true, selectedItemType = 1, previewMesh = null, buildRotation = 0;
         let otherPlayers = {}; 
         let lastPositionSync = 0;
@@ -193,8 +96,15 @@
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            const startY = getTerrainHeight(0, 0) + 1.7;
-            camera.position.set(0, startY, 0);
+            // Player initial position
+            const startY = getTerrainHeight(0, 0);
+            playerGroup.position.set(0, startY, 0);
+            scene.add(playerGroup);
+
+            // Load local player 3D Model
+            loadRealAnimeCharacter(currentUsername, selectedGender, (pData) => {
+                playerGroup.add(pData.group);
+            });
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -217,9 +127,8 @@
             scene.add(flashlightTarget);
             flashlight.target = flashlightTarget;
             
-            camera.add(flashlight);
-            flashlight.position.set(0, 0, 0);
-            scene.add(camera);
+            playerGroup.add(flashlight);
+            flashlight.position.set(0, 1.5, 0);
 
             createProvinceTerrain();
             loadSavedStructures();
@@ -245,14 +154,12 @@
                 if (!isPointerLocked || isChatActive) return;
                 yaw -= e.movementX * 0.0025;
                 pitch -= e.movementY * 0.0025;
-                pitch = Math.max(-Math.PI / 2.8, Math.min(Math.PI / 2.8, pitch));
+                pitch = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitch));
 
-                camera.rotation.order = "YXZ";
-                camera.rotation.y = yaw;
-                camera.rotation.x = pitch;
+                playerGroup.rotation.y = yaw;
 
-                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                flashlightTarget.position.copy(camera.position).add(dir.multiplyScalar(10));
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(playerGroup.quaternion);
+                flashlightTarget.position.copy(playerGroup.position).add(new THREE.Vector3(0, 1.5, 0)).add(dir.multiplyScalar(10));
             });
 
             window.addEventListener('keydown', (e) => onKey(e.code, true));
@@ -296,7 +203,7 @@
         }
 
         function loadRealAnimeCharacter(username, gender, callback) {
-            const playerGroup = new THREE.Group();
+            const group = new THREE.Group();
 
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
@@ -312,24 +219,24 @@
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
             sprite.position.y = 2.4;
             sprite.scale.set(2, 0.5, 1);
-            playerGroup.add(sprite);
+            group.add(sprite);
 
             gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
                 const model = gltf.scene;
                 model.scale.set(0.4, 0.4, 0.4);
                 model.rotation.y = Math.PI; 
-                playerGroup.add(model);
+                group.add(model);
 
                 const mixer = new THREE.AnimationMixer(model);
                 const clips = gltf.animations;
 
-                let idleAction = clips.find(c => c.name.toLowerCase().includes('idle')) || clips[0] ? mixer.clipAction(clips[0]) : null;
-                let walkAction = clips.find(c => c.name.toLowerCase().includes('walk') || c.name.toLowerCase().includes('run')) || clips[6] ? mixer.clipAction(clips[6]) : null;
+                let idleAction = clips.find(c => c.name.toLowerCase().includes('idle')) || (clips[0] ? mixer.clipAction(clips[0]) : null);
+                let walkAction = clips.find(c => c.name.toLowerCase().includes('walk') || c.name.toLowerCase().includes('run')) || (clips[6] ? mixer.clipAction(clips[6]) : null);
 
                 if (idleAction) idleAction.play();
 
                 callback({
-                    group: playerGroup,
+                    group: group,
                     mixer: mixer,
                     idleAction: idleAction,
                     walkAction: walkAction,
@@ -352,14 +259,14 @@
                             scene.add(pData.group);
                             otherPlayers[id] = {
                                 ...pData,
-                                targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
+                                targetPos: new THREE.Vector3(data.x, data.y, data.z),
                                 targetRotY: data.rotation_y || 0
                             };
                         });
                     } else if (payload.eventType === 'UPDATE') {
                         const data = payload.new;
                         if (otherPlayers[id]) {
-                            otherPlayers[id].targetPos.set(data.x, data.y - 1.7, data.z);
+                            otherPlayers[id].targetPos.set(data.x, data.y, data.z);
                             otherPlayers[id].targetRotY = data.rotation_y || 0;
                             otherPlayers[id].isMoving = data.is_moving || false;
                         }
@@ -384,9 +291,9 @@
                 id: currentUserUid,
                 username: currentUsername,
                 gender: selectedGender,
-                x: camera.position.x,
-                y: camera.position.y,
-                z: camera.position.z,
+                x: playerGroup.position.x,
+                y: playerGroup.position.y,
+                z: playerGroup.position.z,
                 rotation_y: yaw,
                 is_moving: isMoving,
                 last_seen: new Date().toISOString()
@@ -448,7 +355,7 @@
                     spot.position.set(0.8, 4.5, 0);
                     group.add(spot);
                 }
-            } else if (type === 2) { // Bahay Kubo
+            } else if (type === 2) { 
                 const baseMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9, transparent: isPreview, opacity: op });
                 const base = new THREE.Mesh(new THREE.BoxGeometry(4, 2.2, 3.5), baseMat);
                 base.position.y = 1.1; group.add(base);
@@ -524,6 +431,11 @@
             if (code === 'KeyD') moveRight = state;
             if (code === 'ShiftLeft') isSprinting = state;
 
+            // TOGGLE CAMERA VIEW WITH [V]
+            if (code === 'KeyV' && state) {
+                isThirdPerson = !isThirdPerson;
+            }
+
             if (code === 'KeyF' && state) {
                 isFlashlightOn = !isFlashlightOn;
                 flashlight.intensity = isFlashlightOn ? 8 : 0;
@@ -587,23 +499,32 @@
 
                 dir.normalize();
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-                camera.position.addScaledVector(dir, speed * delta);
+                playerGroup.position.addScaledVector(dir, speed * delta);
 
-                const currentGroundY = getTerrainHeight(camera.position.x, camera.position.z);
-                const targetCameraY = currentGroundY + 1.7;
+                const currentGroundY = getTerrainHeight(playerGroup.position.x, playerGroup.position.z);
 
-                camera.position.y += velocityY * delta;
+                playerGroup.position.y += velocityY * delta;
                 velocityY += gravity * delta;
 
-                if (camera.position.y <= targetCameraY) {
-                    camera.position.y = targetCameraY;
+                if (playerGroup.position.y <= currentGroundY) {
+                    playerGroup.position.y = currentGroundY;
                     velocityY = 0;
                     canJump = true;
                 }
 
+                // CAMERA POSITIONING (1st Person vs 3rd Person)
+                if (isThirdPerson) {
+                    const relativeOffset = cameraOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                    camera.position.copy(playerGroup.position).add(relativeOffset);
+                    camera.lookAt(playerGroup.position.clone().add(new THREE.Vector3(0, 1.2, 0)));
+                } else {
+                    camera.position.copy(playerGroup.position).add(new THREE.Vector3(0, 1.5, 0));
+                    camera.rotation.set(pitch, yaw, 0, 'YXZ');
+                }
+
                 if (isAdmin && isBuildMode && previewMesh) {
-                    const frontDir = new THREE.Vector3(0, 0, -5).applyQuaternion(camera.quaternion);
-                    const targetPos = camera.position.clone().add(frontDir);
+                    const frontDir = new THREE.Vector3(0, 0, -5).applyQuaternion(playerGroup.quaternion);
+                    const targetPos = playerGroup.position.clone().add(frontDir);
                     const buildGroundY = getTerrainHeight(targetPos.x, targetPos.z);
                     previewMesh.position.set(targetPos.x, buildGroundY, targetPos.z);
                 }
