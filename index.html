@@ -266,56 +266,88 @@
             animate();
         }
 
-        // --- REAL 3D ANIME MODEL LOADER WITH SMOOTH SKELETON ANIMATIONS ---
-        function loadRealAnimeCharacter(username, gender, callback) {
-            const playerGroup = new THREE.Group();
+       // --- COLOR-CODED ANIME CHARACTER MESH (BLUE FOR BOY, PINK FOR GIRL) ---
+function loadRealAnimeCharacter(username, gender, callback) {
+    const playerGroup = new THREE.Group();
 
-            // Name Tag
-            const canvas = document.createElement('canvas');
-            canvas.width = 256; canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
-            ctx.fillRect(0, 0, 256, 64);
-            ctx.font = 'Bold 28px Arial';
-            ctx.fillStyle = '#ffffff';
-            ctx.textAlign = 'center';
-            ctx.fillText(username, 128, 42);
+    // 1. Name Tag
+    const canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, 256, 64);
+    ctx.font = 'Bold 28px Arial';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(username, 128, 42);
 
-            const texture = new THREE.CanvasTexture(canvas);
-            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-            sprite.position.y = 2.4;
-            sprite.scale.set(2, 0.5, 1);
-            playerGroup.add(sprite);
+    const texture = new THREE.CanvasTexture(canvas);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
+    sprite.position.y = 2.2;
+    sprite.scale.set(2, 0.5, 1);
+    playerGroup.add(sprite);
 
-            // Load External 3D GLTF Model Mesh
-            gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
-                const model = gltf.scene;
-                model.scale.set(0.4, 0.4, 0.4);
-                
-                // Rotated 180 degrees to face moving direction properly
-                model.rotation.y = Math.PI; 
-                playerGroup.add(model);
+    // 2. Color Selection (Blue = Boy, Pink = Girl)
+    const isGirl = (gender === 'Girl');
+    const mainColor = isGirl ? 0xec4899 : 0x3b82f6; // Pink : Blue
+    const subColor  = isGirl ? 0xfbcfe8 : 0x93c5fd; // Light Pink : Light Blue
+    const hairColor = isGirl ? 0xfef08a : 0xfde047; // Blonde Hair
 
-                // Setup Skeletal Animation Mixer
-                const mixer = new THREE.AnimationMixer(model);
-                const clips = gltf.animations;
+    const bodyMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.5 });
+    const clothMat = new THREE.MeshStandardMaterial({ color: subColor, roughness: 0.6 });
+    const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.7 });
 
-                let idleAction = clips.find(c => c.name.toLowerCase().includes('idle')) || clips[0] ? mixer.clipAction(clips[0]) : null;
-                let walkAction = clips.find(c => c.name.toLowerCase().includes('walk') || c.name.toLowerCase().includes('run')) || clips[6] ? mixer.clipAction(clips[6]) : null;
+    const charMesh = new THREE.Group();
 
-                if (idleAction) idleAction.play();
+    // Ulo (Head)
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMat);
+    head.position.y = 1.45;
+    head.scale.set(1, 1.1, 1);
+    charMesh.add(head);
 
-                callback({
-                    group: playerGroup,
-                    mixer: mixer,
-                    idleAction: idleAction,
-                    walkAction: walkAction,
-                    isMoving: false
-                });
-            }, undefined, (err) => {
-                console.error("Error loading GLTF Model:", err);
-            });
-        }
+    // Buhok (Hair)
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.31, 12, 12), hairMat);
+    hair.position.set(0, 1.5, -0.02);
+    charMesh.add(hair);
+
+    // Katawan / Damit (Torso / Outfit)
+    const torsoGeo = isGirl ? new THREE.ConeGeometry(0.35, 0.7, 12) : new THREE.CylinderGeometry(0.25, 0.2, 0.7, 12);
+    const torso = new THREE.Mesh(torsoGeo, bodyMat);
+    torso.position.y = 0.95;
+    if (isGirl) torso.rotation.x = Math.PI; // Skirt shape for girl
+    charMesh.add(torso);
+
+    // Mga Binti (Legs)
+    const legGeo = new THREE.CylinderGeometry(0.07, 0.06, 0.6, 8);
+    const leftLeg = new THREE.Mesh(legGeo, clothMat);
+    leftLeg.position.set(-0.12, 0.3, 0);
+    const rightLeg = new THREE.Mesh(legGeo, clothMat);
+    rightLeg.position.set(0.12, 0.3, 0);
+    charMesh.add(leftLeg);
+    charMesh.add(rightLeg);
+
+    // Mga Kamay (Arms)
+    const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.55, 8);
+    const leftArm = new THREE.Mesh(armGeo, skinMat);
+    leftArm.position.set(-0.3, 0.95, 0);
+    leftArm.rotation.z = 0.15;
+    const rightArm = new THREE.Mesh(armGeo, skinMat);
+    rightArm.position.set(0.3, 0.95, 0);
+    rightArm.rotation.z = -0.15;
+    charMesh.add(leftArm);
+    charMesh.add(rightArm);
+
+    playerGroup.add(charMesh);
+
+    // Return Data
+    callback({
+        group: playerGroup,
+        leftLeg: leftLeg,
+        rightLeg: rightLeg,
+        isMoving: false
+    });
+}
 
         // --- MULTIPLAYER REALTIME PLAYER SYNC ---
         function listenToOnlinePlayers() {
