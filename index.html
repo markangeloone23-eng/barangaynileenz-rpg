@@ -27,10 +27,10 @@
         .start-btn { background: #9b2c2c; color: white; font-weight: bold; padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; }
 
         /* UI OVERLAY */
-        #ui-layer { display: none; position: absolute; top: 0; left: 0; width: 100%; padding: 15px 25px; justify-content: space-between; align-items: center; z-index: 10; pointer-events: none; }
+        #ui-layer { display: none; position: absolute; top: 0; left: 0; width: 100%; padding: 15px 25px; justify-content: space-between; align-items: center; z-index: 10; pointer-events: none; background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent); }
         #ui-layer button { pointer-events: auto; }
-        #crosshair { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.4); font-size: 20px; pointer-events: none; z-index: 10; }
-        #click-prompt { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 8px; border: 1px solid #e53e3e; pointer-events: none; z-index: 10; }
+        #crosshair { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: rgba(255, 255, 255, 0.8); font-size: 24px; pointer-events: none; z-index: 10; font-weight: bold; }
+        #click-prompt { display: none; position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.85); color: #f87171; padding: 12px 24px; border-radius: 8px; border: 1px solid #e53e3e; pointer-events: none; z-index: 10; font-weight: bold; text-align: center; }
     </style>
 
     <!-- Firebase SDKs -->
@@ -38,7 +38,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-    <!-- Three.js (3D Engine) & PointerLockControls -->
+    <!-- Three.js (3D Engine) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
@@ -80,11 +80,11 @@
 
     <!-- 3. UI OVERLAY -->
     <div id="ui-layer">
-        <div><strong>Player:</strong> <span id="display-name">-</span> | <strong>Pera:</strong> ₱<span id="display-money">500</span></div>
+        <div><strong>Player:</strong> <span id="display-name" style="color: #fca5a5;">-</span> | <strong>Pera:</strong> ₱<span id="display-money" style="color: #fef08a;">500</span></div>
         <button onclick="logout()" style="background: #9b2c2c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Logout</button>
     </div>
     <div id="crosshair">+</div>
-    <div id="click-prompt">I-click ang Screen para Igalaw ang Camera</div>
+    <div id="click-prompt">I-CLICK ANG SCREEN PARA I-LOCK ANG MOUSE<br><small style="color: #ccc; font-weight: normal;">(Gumamit ng WASD para maglakad)</small></div>
 
     <script>
         const firebaseConfig = {
@@ -102,7 +102,7 @@
         const db = firebase.firestore();
 
         let isRegisterMode = false, selectedGender = "Boy", currentUserUid = null, currentPlayerData = null;
-        let otherPlayers = {}, otherPlayerMeshes = {};
+        let otherPlayerMeshes = {};
 
         function toggleAuthMode() {
             isRegisterMode = !isRegisterMode;
@@ -154,8 +154,8 @@
             start3DGame();
         }
 
-        // --- THREE.JS 3D ENGINE & CONTROLS ---
-        let scene, camera, renderer, flashlight;
+        // --- THREE.JS 3D ENGINE ---
+        let scene, camera, renderer, flashlight, flashlightTarget;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let prevTime = performance.now();
         let yaw = 0, pitch = 0;
@@ -166,35 +166,43 @@
             document.getElementById('crosshair').style.display = 'block';
             document.getElementById('click-prompt').style.display = 'block';
 
-            // 1. Setup Scene, Camera & Fog (Horror Atmosphere)
+            // 1. Scene & Camera Setup
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020202);
-            scene.fog = new THREE.FogExp2(0x020202, 0.08); // Dark fog
+            scene.background = new THREE.Color(0x050811); // Dark blue night sky
+            scene.fog = new THREE.FogExp2(0x050811, 0.035); // Light atmospheric fog
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.6, 0); // Eye-level height
+            camera.position.set(0, 1.7, 5); // Start on street
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // 2. Flashlight Effect (SpotLight) Attached to Camera
-            flashlight = new THREE.SpotLight(0xfff5cc, 3, 25, Math.PI / 6, 0.5, 1);
-            flashlight.position.set(0, 0, 0);
-            camera.add(flashlight);
-            flashlight.target = camera;
-            scene.add(camera);
-
-            // Low Ambient Light for eerie shadows
-            const ambient = new THREE.AmbientLight(0x0a0a1a);
+            // 2. Ambient & Moonlight Lighting
+            const ambient = new THREE.AmbientLight(0x223344, 0.8); // Ambient Moonlight
             scene.add(ambient);
 
-            // 3. Build 3D World (Ground & Street Walls)
+            const moonLight = new THREE.DirectionalLight(0x334466, 0.5);
+            moonLight.position.set(10, 20, 10);
+            scene.add(moonLight);
+
+            // 3. Bright Player Flashlight
+            flashlight = new THREE.SpotLight(0xfffae6, 5, 40, Math.PI / 5, 0.4, 1);
+            flashlightTarget = new THREE.Object3D();
+            scene.add(flashlightTarget);
+            flashlight.target = flashlightTarget;
+
+            camera.add(flashlight);
+            flashlight.position.set(0.3, -0.2, 0); // Position at hand level
+            scene.add(camera);
+
+            // 4. Build 3D Barangay Environment
             buildWorld();
 
-            // 4. Mouse Controls (Pointer Lock)
+            // 5. Controls Setup
             document.body.addEventListener('click', () => {
-                document.body.requestPointerLock();
+                if (!isPointerLocked) document.body.requestPointerLock();
             });
 
             document.addEventListener('pointerlockchange', () => {
@@ -204,20 +212,23 @@
 
             document.addEventListener('mousemove', (e) => {
                 if (!isPointerLocked) return;
-                yaw -= e.movementX * 0.002;
-                pitch -= e.movementY * 0.002;
-                pitch = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, pitch)); // Limit up/down tilt
+                yaw -= e.movementX * 0.0025;
+                pitch -= e.movementY * 0.0025;
+                pitch = Math.max(-Math.PI / 2.8, Math.min(Math.PI / 2.8, pitch));
 
                 camera.rotation.order = "YXZ";
                 camera.rotation.y = yaw;
                 camera.rotation.x = pitch;
+
+                // Update Flashlight Target Pointing Direction
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                flashlightTarget.position.copy(camera.position).add(dir);
             });
 
-            // Keyboard Controls
             window.addEventListener('keydown', (e) => onKey(e.code, true));
             window.addEventListener('keyup', (e) => onKey(e.code, false));
 
-            // Firebase Real-time Player Data Sync
+            // Sync Firebase
             db.collection('users').doc(currentUserUid).onSnapshot(doc => {
                 currentPlayerData = doc.data();
                 document.getElementById('display-name').innerText = currentPlayerData.username;
@@ -227,8 +238,7 @@
             db.collection('users').onSnapshot(snapshot => {
                 snapshot.forEach(doc => {
                     if (doc.id !== currentUserUid) {
-                        const data = doc.data();
-                        updateOtherPlayer3D(doc.id, data);
+                        updateOtherPlayer3D(doc.id, doc.data());
                     }
                 });
             });
@@ -244,35 +254,74 @@
         }
 
         function buildWorld() {
-            // Ground (Road Texture/Color)
-            const groundGeo = new THREE.PlaneGeometry(100, 100);
-            const groundMat = new THREE.MeshStandardMaterial({ color: 0x111115, roughness: 0.9 });
-            const ground = new THREE.Mesh(groundGeo, groundMat);
-            ground.rotation.x = -Math.PI / 2;
-            scene.add(ground);
+            // Main Street Asphalt Ground
+            const roadGeo = new THREE.PlaneGeometry(16, 120);
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+            const road = new THREE.Mesh(roadGeo, roadMat);
+            road.rotation.x = -Math.PI / 2;
+            scene.add(road);
 
-            // 3D Barangay Walls / Houses Placeholder
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-            
-            for (let i = -30; i <= 30; i += 12) {
-                if (i === 0) continue;
-                // Left & Right Houses along the street
-                createHouse(i, 2.5, -15, wallMat);
-                createHouse(i, 2.5, 15, wallMat);
+            // Sidewalk Grass/Dirt
+            const grassGeo = new THREE.PlaneGeometry(100, 120);
+            const grassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 1.0 });
+            const grass = new THREE.Mesh(grassGeo, grassMat);
+            grass.rotation.x = -Math.PI / 2;
+            grass.position.y = -0.01;
+            scene.add(grass);
+
+            // Houses & Streetlights along the road
+            for (let z = -50; z <= 50; z += 18) {
+                // Left Houses
+                createHouse(-13, z, 0x334155);
+                // Right Houses
+                createHouse(13, z, 0x475569);
+
+                // Streetlights with dim orange glow
+                if (z % 36 === 0) {
+                    createStreetlight(-9, z);
+                    createStreetlight(9, z);
+                }
             }
         }
 
-        function createHouse(x, y, z, mat) {
-            const houseGeo = new THREE.BoxGeometry(8, 5, 8);
-            const house = new THREE.Mesh(houseGeo, mat);
-            house.position.set(x, y, z);
-            scene.add(house);
+        function createHouse(x, z, colorHex) {
+            const group = new THREE.Group();
+            
+            // House Body
+            const bodyGeo = new THREE.BoxGeometry(10, 6, 12);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.7 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 3;
+            group.add(body);
+
+            // Roof
+            const roofGeo = new THREE.ConeGeometry(8, 4, 4);
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x7f1d1d, roughness: 0.6 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = 8;
+            roof.rotation.y = Math.PI / 4;
+            group.add(roof);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+        }
+
+        function createStreetlight(x, z) {
+            const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, 6);
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            const pole = new THREE.Mesh(poleGeo, poleMat);
+            pole.position.set(x, 3, z);
+            scene.add(pole);
+
+            // Dim Orange Bulb
+            const light = new THREE.PointLight(0xf97316, 2, 12);
+            light.position.set(x, 5.8, z);
+            scene.add(light);
         }
 
         function updateOtherPlayer3D(id, data) {
             if (!data.x && data.x !== 0) return;
             if (!otherPlayerMeshes[id]) {
-                // 3D Silhouette Placeholder for Other Players
                 const geo = new THREE.CylinderGeometry(0.4, 0.4, 1.8, 16);
                 const mat = new THREE.MeshStandardMaterial({ color: data.gender === 'Boy' ? 0x3b82f6 : 0xec4899 });
                 const mesh = new THREE.Mesh(geo, mat);
@@ -290,7 +339,7 @@
             prevTime = time;
 
             if (isPointerLocked) {
-                const speed = 4.5 * delta;
+                const speed = 5.0 * delta;
                 const dir = new THREE.Vector3();
 
                 if (moveForward) dir.z -= 1;
@@ -299,9 +348,13 @@
                 if (moveRight) dir.x += 1;
 
                 dir.normalize();
-                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw); // Move relative to camera direction
+                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
 
                 camera.position.addScaledVector(dir, speed);
+
+                // Flashlight target follows camera motion
+                const lookDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                flashlightTarget.position.copy(camera.position).add(lookDir);
 
                 // Send 3D Positions to Firebase
                 if (currentUserUid && (moveForward || moveBackward || moveLeft || moveRight)) {
