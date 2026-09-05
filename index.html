@@ -266,7 +266,7 @@
             animate();
         }
 
-       // --- COLOR-CODED ANIME CHARACTER MESH (BLUE FOR BOY, PINK FOR GIRL) ---
+       // --- 3D ROBOT MODEL (BLUE FOR BOY, PINK FOR GIRL) ---
 function loadRealAnimeCharacter(username, gender, callback) {
     const playerGroup = new THREE.Group();
 
@@ -283,69 +283,45 @@ function loadRealAnimeCharacter(username, gender, callback) {
 
     const texture = new THREE.CanvasTexture(canvas);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-    sprite.position.y = 2.2;
+    sprite.position.y = 2.4;
     sprite.scale.set(2, 0.5, 1);
     playerGroup.add(sprite);
 
-    // 2. Color Selection (Blue = Boy, Pink = Girl)
-    const isGirl = (gender === 'Girl');
-    const mainColor = isGirl ? 0xec4899 : 0x3b82f6; // Pink : Blue
-    const subColor  = isGirl ? 0xfbcfe8 : 0x93c5fd; // Light Pink : Light Blue
-    const hairColor = isGirl ? 0xfef08a : 0xfde047; // Blonde Hair
+    // 2. Load 3D Mesh
+    gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
+        const model = gltf.scene;
+        model.scale.set(0.4, 0.4, 0.4);
+        model.rotation.y = Math.PI; 
 
-    const bodyMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.5 });
-    const clothMat = new THREE.MeshStandardMaterial({ color: subColor, roughness: 0.6 });
-    const hairMat = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
-    const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac, roughness: 0.7 });
+        // 3. Color Tinting: Blue = Boy, Pink = Girl
+        const isGirl = (gender === 'Girl');
+        const customColor = isGirl ? 0xec4899 : 0x3b82f6; // Pink : Blue
 
-    const charMesh = new THREE.Group();
+        model.traverse((child) => {
+            if (child.isMesh) {
+                child.material = child.material.clone();
+                child.material.color.setHex(customColor);
+            }
+        });
 
-    // Ulo (Head)
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), skinMat);
-    head.position.y = 1.45;
-    head.scale.set(1, 1.1, 1);
-    charMesh.add(head);
+        playerGroup.add(model);
 
-    // Buhok (Hair)
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.31, 12, 12), hairMat);
-    hair.position.set(0, 1.5, -0.02);
-    charMesh.add(hair);
+        // 4. Setup Animation
+        const mixer = new THREE.AnimationMixer(model);
+        const clips = gltf.animations;
 
-    // Katawan / Damit (Torso / Outfit)
-    const torsoGeo = isGirl ? new THREE.ConeGeometry(0.35, 0.7, 12) : new THREE.CylinderGeometry(0.25, 0.2, 0.7, 12);
-    const torso = new THREE.Mesh(torsoGeo, bodyMat);
-    torso.position.y = 0.95;
-    if (isGirl) torso.rotation.x = Math.PI; // Skirt shape for girl
-    charMesh.add(torso);
+        let idleAction = clips[0] ? mixer.clipAction(clips[0]) : null;
+        let walkAction = clips[6] ? mixer.clipAction(clips[6]) : null;
 
-    // Mga Binti (Legs)
-    const legGeo = new THREE.CylinderGeometry(0.07, 0.06, 0.6, 8);
-    const leftLeg = new THREE.Mesh(legGeo, clothMat);
-    leftLeg.position.set(-0.12, 0.3, 0);
-    const rightLeg = new THREE.Mesh(legGeo, clothMat);
-    rightLeg.position.set(0.12, 0.3, 0);
-    charMesh.add(leftLeg);
-    charMesh.add(rightLeg);
+        if (idleAction) idleAction.play();
 
-    // Mga Kamay (Arms)
-    const armGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.55, 8);
-    const leftArm = new THREE.Mesh(armGeo, skinMat);
-    leftArm.position.set(-0.3, 0.95, 0);
-    leftArm.rotation.z = 0.15;
-    const rightArm = new THREE.Mesh(armGeo, skinMat);
-    rightArm.position.set(0.3, 0.95, 0);
-    rightArm.rotation.z = -0.15;
-    charMesh.add(leftArm);
-    charMesh.add(rightArm);
-
-    playerGroup.add(charMesh);
-
-    // Return Data
-    callback({
-        group: playerGroup,
-        leftLeg: leftLeg,
-        rightLeg: rightLeg,
-        isMoving: false
+        callback({
+            group: playerGroup,
+            mixer: mixer,
+            idleAction: idleAction,
+            walkAction: walkAction,
+            isMoving: false
+        });
     });
 }
 
