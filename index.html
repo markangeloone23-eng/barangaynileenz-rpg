@@ -5,31 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Barangay Life RPG</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
-        body { background-color: #1a1a1a; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: #111; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
         
-        .auth-container { background: #2c3e50; padding: 30px; border-radius: 12px; width: 350px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        .auth-container h2 { margin-bottom: 20px; color: #f1c40f; }
-        .auth-container input, .auth-container select, .auth-container button { width: 100%; padding: 10px; margin: 8px 0; border-radius: 6px; border: none; }
+        .auth-container { background: #2c3e50; padding: 30px; border-radius: 12px; width: 420px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
+        .auth-container h2 { margin-bottom: 15px; color: #f1c40f; }
+        .auth-container input, .auth-container button { width: 100%; padding: 10px; margin: 6px 0; border-radius: 6px; border: none; }
         .auth-container button { background: #27ae60; color: white; font-weight: bold; cursor: pointer; }
         .toggle-btn { background: transparent !important; color: #bdc3c7 !important; text-decoration: underline; cursor: pointer; }
 
+        /* Genshin-style Visual Character Selection Cards */
+        .char-select-title { margin-top: 10px; font-size: 14px; color: #ecf0f1; font-weight: bold; }
+        .char-container { display: flex; justify-content: space-around; margin: 10px 0; }
+        .char-card { background: #34495e; border: 3px solid transparent; border-radius: 10px; padding: 10px; cursor: pointer; width: 45%; transition: 0.3s; }
+        .char-card:hover { transform: scale(1.05); }
+        .char-card.selected { border-color: #f1c40f; background: #111827; box-shadow: 0 0 10px #f1c40f; }
+        .char-card img { width: 70px; height: 70px; object-fit: contain; }
+        .char-card p { margin-top: 5px; font-weight: bold; font-size: 14px; }
+
         #game-screen { display: none; flex-direction: column; align-items: center; }
-        #ui-bar { background: #34495e; width: 800px; padding: 15px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; }
-        #game-canvas { background-color: #7dcf5a; border: 4px solid #2c3e50; }
+        #ui-bar { background: #2c3e50; width: 800px; padding: 15px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1c40f; }
+        #game-canvas { background-color: #27ae60; border: 4px solid #2c3e50; }
         
         .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2c3e50; border: 3px solid #f1c40f; padding: 20px; border-radius: 10px; text-align: center; min-width: 300px; z-index: 10; }
         .modal button { padding: 8px 15px; margin: 5px; cursor: pointer; border: none; border-radius: 4px; background: #e67e22; color: white; font-weight: bold; }
     </style>
 
-    <!-- Firebase CDN Libraries para sa Notepad/HTML (Compat Version) -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
-    <!-- LOGIN / REGISTER SCREEN -->
+    <!-- AUTH & VISUAL CHARACTER SELECTION SCREEN -->
     <div id="auth-screen" class="auth-container">
         <h2 id="auth-title">Barangay Login</h2>
         <input type="email" id="email" placeholder="Email (e.g. juan@gmail.com)">
@@ -37,10 +46,18 @@
         
         <div id="register-fields" style="display: none;">
             <input type="text" id="username" placeholder="Username (In-game Name)">
-            <select id="gender">
-                <option value="Boy">Boy (Lalaki)</option>
-                <option value="Girl">Girl (Babae)</option>
-            </select>
+            
+            <p class="char-select-title">PILIIN ANG IYONG CHARACTER:</p>
+            <div class="char-container">
+                <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
+                    <img src="https://img.icons8.com/3d-fluency/94/boy-1.png" alt="Boy">
+                    <p>Boy (Lalaki)</p>
+                </div>
+                <div class="char-card" id="card-girl" onclick="selectGender('Girl')">
+                    <img src="https://img.icons8.com/3d-fluency/94/girl-1.png" alt="Girl">
+                    <p>Girl (Babae)</p>
+                </div>
+            </div>
         </div>
 
         <button id="auth-btn" onclick="handleAuth()">LOGIN</button>
@@ -66,7 +83,6 @@
     </div>
 
     <script>
-        // ANG IYONG FIREBASE CONFIG (Inayos na para sa HTML/Notepad Format)
         const firebaseConfig = {
             apiKey: "AIzaSyBvO_hpTfhHRf-J2Qy7yLgcdEZ7V5vomb4",
             authDomain: "barangaynileenz-rpg.firebaseapp.com",
@@ -77,24 +93,37 @@
             measurementId: "G-PLJCTGHFHF"
         };
 
-        // Initialize Firebase System
         firebase.initializeApp(firebaseConfig);
         const auth = firebase.auth();
         const db = firebase.firestore();
 
         let isRegisterMode = false;
+        let selectedGender = "Boy";
         let currentUserUid = null;
         let currentPlayerData = null;
         let otherPlayers = {};
 
+        // Load Character Sprite Images
+        const boyImg = new Image();
+        boyImg.src = "https://img.icons8.com/3d-fluency/94/boy-1.png";
+
+        const girlImg = new Image();
+        girlImg.src = "https://img.icons8.com/3d-fluency/94/girl-1.png";
+
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
 
-        let player = { x: 100, y: 100, size: 30, speed: 5 };
+        let player = { x: 100, y: 100, size: 40, speed: 5 };
         const structures = [
             { name: "Aking Bahay", x: 50, y: 50, w: 80, h: 80, color: "#e67e22" },
             { name: "Sugalan", x: 650, y: 50, w: 80, h: 80, color: "#f1c40f", type: "gambling" }
         ];
+
+        function selectGender(gender) {
+            selectedGender = gender;
+            document.getElementById('card-boy').classList.toggle('selected', gender === 'Boy');
+            document.getElementById('card-girl').classList.toggle('selected', gender === 'Girl');
+        }
 
         function toggleAuthMode() {
             isRegisterMode = !isRegisterMode;
@@ -111,19 +140,18 @@
 
             if (isRegisterMode) {
                 const username = document.getElementById('username').value.trim();
-                const gender = document.getElementById('gender').value;
                 if (!username) return alert("Kailangan ang Username!");
 
                 try {
                     const res = await auth.createUserWithEmailAndPassword(email, pass);
                     await db.collection('users').doc(res.user.uid).set({
                         username: username,
-                        gender: gender,
+                        gender: selectedGender,
                         money: 500,
                         x: 100,
                         y: 100
                     });
-                    alert("Account Created Successfully!");
+                    alert("Account Created!");
                 } catch (err) { alert(err.message); }
             } else {
                 try {
@@ -142,7 +170,6 @@
         });
 
         function initGame() {
-            // Realtime Sync ng Sariling Data
             db.collection('users').doc(currentUserUid).onSnapshot(doc => {
                 currentPlayerData = doc.data();
                 document.getElementById('display-name').innerText = currentPlayerData.username;
@@ -150,7 +177,6 @@
                 document.getElementById('display-money').innerText = currentPlayerData.money;
             });
 
-            // Realtime Sync para Makita ang ibang Multiplayer Players
             db.collection('users').onSnapshot(snapshot => {
                 otherPlayers = {};
                 snapshot.forEach(doc => {
@@ -197,23 +223,28 @@
                 ctx.fillStyle = s.color;
                 ctx.fillRect(s.x, s.y, s.w, s.h);
                 ctx.fillStyle = "white";
+                ctx.font = "12px sans-serif";
                 ctx.fillText(s.name, s.x + 5, s.y - 5);
             });
 
-            // Draw Other Players (Multiplayer)
+            // Draw Other Players with 2D Sprite Images
             for (let id in otherPlayers) {
                 let p = otherPlayers[id];
-                ctx.fillStyle = p.gender === 'Boy' ? '#e74c3c' : '#fd79a8';
-                ctx.fillRect(p.x, p.y, player.size, player.size);
+                let imgToDraw = p.gender === 'Boy' ? boyImg : girlImg;
+                ctx.drawImage(imgToDraw, p.x, p.y, player.size, player.size);
+                
                 ctx.fillStyle = "white";
+                ctx.font = "bold 12px sans-serif";
                 ctx.fillText(p.username, p.x - 5, p.y - 5);
             }
 
-            // Draw Own Player
+            // Draw Own Player with 2D Sprite Image
             if (currentPlayerData) {
-                ctx.fillStyle = currentPlayerData.gender === 'Boy' ? '#3498db' : '#e84393';
-                ctx.fillRect(player.x, player.y, player.size, player.size);
-                ctx.fillStyle = "white";
+                let myImg = currentPlayerData.gender === 'Boy' ? boyImg : girlImg;
+                ctx.drawImage(myImg, player.x, player.y, player.size, player.size);
+                
+                ctx.fillStyle = "#f1c40f";
+                ctx.font = "bold 12px sans-serif";
                 ctx.fillText(currentPlayerData.username, player.x - 5, player.y - 5);
             }
         }
