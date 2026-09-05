@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D Horror RPG - Smooth Multiplayer</title>
+    <title>Barangay 3D Horror RPG - Anime Animated Characters</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
@@ -31,7 +31,6 @@
         #stamina-container { width: 160px; height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 6px; border: 1px solid #475569; }
         #stamina-bar { width: 100%; height: 100%; background: #eab308; }
 
-        /* LIVE CHAT SYSTEM STYLES */
         #chat-container { display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; height: 200px; background: rgba(15, 23, 42, 0.85); border: 1px solid #374151; border-radius: 8px; z-index: 20; padding: 10px; display: flex; flex-direction: column; pointer-events: auto; }
         #chat-messages { flex: 1; overflow-y: auto; font-size: 13px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
         #chat-messages div { word-wrap: break-word; }
@@ -44,6 +43,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GLTF/GLB LOADER FOR ANIME CHARACTERS -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
@@ -59,15 +60,15 @@
     </div>
 
     <div id="story-screen">
-        <h2 style="color: #e53e3e; margin-bottom: 15px;">Pumili ng Character</h2>
+        <h2 style="color: #e53e3e; margin-bottom: 15px;">Pumili ng Anime Character</h2>
         <div class="char-container">
             <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
                 <img src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png" alt="Boy">
-                <p>Boy</p>
+                <p>Aether (Boy)</p>
             </div>
             <div class="char-card" id="card-girl" onclick="selectGender('Girl')">
                 <img src="https://cdn-icons-png.flaticon.com/512/4140/4140047.png" alt="Girl">
-                <p>Girl</p>
+                <p>Lumine (Girl)</p>
             </div>
         </div>
         <button class="start-btn" style="background:#9b2c2c; color:white; padding:10px 20px; border:none; cursor:pointer;" onclick="confirmCharacterSelection()">MAGSIMULA</button>
@@ -87,7 +88,7 @@
         <span class="build-item" id="item-2">[2] Skwaters House (Yero)</span>
         <span class="build-item" id="item-3">[3] Concrete Double House</span>
         <span class="build-item" id="item-4">[4] Posteng Kawayan/Puno</span>
-        <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Full Light</span> | [R] Rotate | [Click] Place</div>
+        <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Light</span> | [R] Rotate | [Click] Place</div>
     </div>
 
     <div id="chat-container">
@@ -157,9 +158,7 @@
                         currentUsername = data.username || "Player";
                         document.getElementById('display-name').innerText = currentUsername;
                         isAdmin = data.isAdmin || false;
-                        if (isAdmin) {
-                            document.getElementById('admin-badge').style.display = 'inline-block';
-                        }
+                        if (isAdmin) document.getElementById('admin-badge').style.display = 'inline-block';
                         if (data.gender) start3DGame();
                         else document.getElementById('story-screen').style.display = 'block';
                     }
@@ -173,15 +172,19 @@
             start3DGame();
         }
 
-        // --- GAME & ENGINE VARIABLES ---
+        // --- GAME ENGINE VARIABLES ---
         let scene, camera, renderer, flashlight, flashlightTarget, adminAmbientLight;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isSprinting = false;
         let canJump = true, velocityY = 0, gravity = -18.0, stamina = 100;
         let prevTime = performance.now(), yaw = 0, pitch = 0, isPointerLocked = false;
 
         let isBuildMode = false, isAdminLightOn = false, isFlashlightOn = true, selectedItemType = 1, previewMesh = null, buildRotation = 0;
-        let otherPlayers = {}; // Stores player mesh and target positions for smooth lerp
+        let otherPlayers = {}; 
         let lastPositionSync = 0;
+        let gltfLoader = new THREE.GLTFLoader();
+
+        // CDN Standard Animated Humanoid Model URLs
+        const ANIME_MODEL_URL = "https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Xbot.glb";
 
         function start3DGame() {
             document.getElementById('ui-layer').style.display = 'flex';
@@ -201,24 +204,22 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            const moonLight = new THREE.DirectionalLight(0x1e293b, 0.3);
+            const moonLight = new THREE.DirectionalLight(0x1e293b, 0.5);
             moonLight.position.set(20, 40, 20);
             scene.add(moonLight);
 
-            const ambient = new THREE.AmbientLight(0x0a0f1d, 0.5);
+            const ambient = new THREE.AmbientLight(0x1a202c, 0.8);
             scene.add(ambient);
 
             adminAmbientLight = new THREE.DirectionalLight(0xffffff, 0);
             adminAmbientLight.position.set(0, 50, 0);
             scene.add(adminAmbientLight);
 
-            // ACCURATE CENTERED FLASHLIGHT
             flashlight = new THREE.SpotLight(0xfffae6, 8, 35, Math.PI / 5, 0.3, 1);
             flashlightTarget = new THREE.Object3D();
             scene.add(flashlightTarget);
             flashlight.target = flashlightTarget;
             
-            // Attach flashlight directly to camera eye position
             camera.add(flashlight);
             flashlight.position.set(0, 0, 0);
             scene.add(camera);
@@ -254,7 +255,6 @@
                 camera.rotation.y = yaw;
                 camera.rotation.x = pitch;
 
-                // Lock Flashlight Beam Exactly To Center Crosshair
                 const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
                 flashlightTarget.position.copy(camera.position).add(dir.multiplyScalar(10));
             });
@@ -266,53 +266,11 @@
             animate();
         }
 
-        // --- DETAILED HUMANOID CHARACTER CREATOR ---
-        function createPlayerAvatarMesh(username, gender) {
-            const group = new THREE.Group();
+        // --- LOAD ANIMATED 3D CHARACTER WITH SKELETAL MOVEMENT ---
+        function loadAnimatedCharacter(username, gender, callback) {
+            const playerGroup = new THREE.Group();
 
-            const isBoy = (gender === "Boy");
-            const shirtColor = isBoy ? 0x2563eb : 0xec4899; // Blue or Pink shirt
-            const pantsColor = isBoy ? 0x1e293b : 0x334155; // Dark pants
-
-            const shirtMat = new THREE.MeshStandardMaterial({ color: shirtColor });
-            const pantsMat = new THREE.MeshStandardMaterial({ color: pantsColor });
-            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdbac }); // Skin tone
-
-            // Torso (Katawan)
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.65, 0.28), shirtMat);
-            torso.position.y = 1.05;
-            group.add(torso);
-
-            // Head (Ulo)
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skinMat);
-            head.position.y = 1.52;
-            group.add(head);
-
-            // Hair (Buhok)
-            const hairMat = new THREE.MeshStandardMaterial({ color: 0x1c1917 });
-            const hair = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.12, 0.42), hairMat);
-            hair.position.y = 1.68;
-            group.add(hair);
-
-            // Arms (Mga Kamay)
-            const armL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.12), skinMat);
-            armL.position.set(-0.33, 1.05, 0);
-            group.add(armL);
-
-            const armR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.55, 0.12), skinMat);
-            armR.position.set(0.33, 1.05, 0);
-            group.add(armR);
-
-            // Legs (Mga Paa)
-            const legL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.18), pantsMat);
-            legL.position.set(-0.14, 0.35, 0);
-            group.add(legL);
-
-            const legR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.65, 0.18), pantsMat);
-            legR.position.set(0.14, 0.35, 0);
-            group.add(legR);
-
-            // Name Tag Floating Sprite
+            // Floating Name Tag
             const canvas = document.createElement('canvas');
             canvas.width = 256; canvas.height = 64;
             const ctx = canvas.getContext('2d');
@@ -325,33 +283,58 @@
 
             const texture = new THREE.CanvasTexture(canvas);
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
-            sprite.position.y = 2.0;
+            sprite.position.y = 2.2;
             sprite.scale.set(2, 0.5, 1);
-            group.add(sprite);
+            playerGroup.add(sprite);
 
-            return group;
+            // Load 3D GLTF Model with Bones and Animations
+            gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
+                const model = gltf.scene;
+                model.scale.set(1, 1, 1);
+                playerGroup.add(model);
+
+                // Setup Animation Mixer & Actions (Walk/Idle)
+                const mixer = new THREE.AnimationMixer(model);
+                const animations = gltf.animations;
+                
+                let idleAction = animations[0] ? mixer.clipAction(animations[0]) : null;
+                let walkAction = animations[3] ? mixer.clipAction(animations[3]) : null;
+
+                if (idleAction) idleAction.play();
+
+                callback({
+                    group: playerGroup,
+                    mixer: mixer,
+                    idleAction: idleAction,
+                    walkAction: walkAction,
+                    isMoving: false
+                });
+            });
         }
 
-        // --- REALTIME MULTIPLAYER WITH LERP SMOOTHING ---
+        // --- MULTIPLAYER REALTIME PLAYER SYNC ---
         function listenToOnlinePlayers() {
             db.collection('online_players').onSnapshot(snapshot => {
                 snapshot.docChanges().forEach(change => {
                     const id = change.doc.id;
                     const data = change.doc.data();
 
-                    if (id === currentUserUid) return; // Ignore local player
+                    if (id === currentUserUid) return; 
 
-                    if (change.type === "added" || change.type === "modified") {
-                        if (!otherPlayers[id]) {
-                            const avatar = createPlayerAvatarMesh(data.username, data.gender);
-                            scene.add(avatar);
+                    if (change.type === "added") {
+                        loadAnimatedCharacter(data.username, data.gender, (playerData) => {
+                            scene.add(playerData.group);
                             otherPlayers[id] = {
-                                mesh: avatar,
+                                ...playerData,
                                 targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
-                                targetRotY: data.rotationY || 0
+                                targetRotY: data.rotationY || 0,
+                                lastPos: new THREE.Vector3(data.x, data.y - 1.7, data.z)
                             };
-                        } else {
-                            // Update target coordinates for smooth interpolation
+                        });
+                    }
+
+                    if (change.type === "modified") {
+                        if (otherPlayers[id]) {
                             otherPlayers[id].targetPos.set(data.x, data.y - 1.7, data.z);
                             otherPlayers[id].targetRotY = data.rotationY || 0;
                         }
@@ -359,7 +342,7 @@
 
                     if (change.type === "removed") {
                         if (otherPlayers[id]) {
-                            scene.remove(otherPlayers[id].mesh);
+                            scene.remove(otherPlayers[id].group);
                             delete otherPlayers[id];
                         }
                     }
@@ -373,6 +356,7 @@
 
         function broadcastPlayerPosition() {
             if (!currentUserUid) return;
+            const isMoving = moveForward || moveBackward || moveLeft || moveRight;
             db.collection('online_players').doc(currentUserUid).set({
                 username: currentUsername,
                 gender: selectedGender,
@@ -380,11 +364,12 @@
                 y: camera.position.y,
                 z: camera.position.z,
                 rotationY: yaw,
+                isMoving: isMoving,
                 lastSeen: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
         }
 
-        // --- REALTIME CHAT SYSTEM ---
+        // --- CHAT SYSTEM ---
         function listenToChatMessages() {
             db.collection('global_chat').orderBy('timestamp', 'desc').limit(20).onSnapshot(snapshot => {
                 const chatBox = document.getElementById('chat-messages');
@@ -412,7 +397,7 @@
             });
         }
 
-        // --- TERRAIN & ENVIRONMENT ---
+        // --- MAP & BUILD ENGINE ---
         function createPhilippineTerrain() {
             const roadGeo = new THREE.PlaneGeometry(8, 200);
             const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f1f22, roughness: 0.9 });
@@ -561,7 +546,6 @@
             if (code === 'KeyD') moveRight = state;
             if (code === 'ShiftLeft') isSprinting = state;
 
-            // FLASHLIGHT ON/OFF TOGGLE (F Key)
             if (code === 'KeyF' && state) {
                 isFlashlightOn = !isFlashlightOn;
                 flashlight.intensity = isFlashlightOn ? 8 : 0;
@@ -641,18 +625,41 @@
                     previewMesh.position.set(targetPos.x, 0, targetPos.z);
                 }
 
-                // Sync Player Position Every 80ms
                 if (time - lastPositionSync > 80) {
                     broadcastPlayerPosition();
                     lastPositionSync = time;
                 }
             }
 
-            // SMOOTH LERP INTERPOLATION FOR REMOTE PLAYERS
+            // ANIMATION & LERP LOGIC FOR MULTIPLAYER PLAYERS
             for (let id in otherPlayers) {
                 const p = otherPlayers[id];
-                p.mesh.position.lerp(p.targetPos, 0.15); // Smooth linear movement
-                p.mesh.rotation.y += (p.targetRotY - p.mesh.rotation.y) * 0.15;
+
+                // Smooth position and rotation movement
+                p.group.position.lerp(p.targetPos, 0.15);
+                p.group.rotation.y += (p.targetRotY - p.group.rotation.y) * 0.15;
+
+                // Detect movement distance to trigger Walking Skeletal Animation
+                const distMoved = p.group.position.distanceTo(p.lastPos);
+                p.lastPos.copy(p.group.position);
+
+                if (p.mixer) {
+                    p.mixer.update(delta);
+
+                    if (distMoved > 0.01 && p.walkAction && p.idleAction) {
+                        if (!p.isMoving) {
+                            p.idleAction.stop();
+                            p.walkAction.play();
+                            p.isMoving = true;
+                        }
+                    } else if (distMoved <= 0.01 && p.walkAction && p.idleAction) {
+                        if (p.isMoving) {
+                            p.walkAction.stop();
+                            p.idleAction.play();
+                            p.isMoving = false;
+                        }
+                    }
+                }
             }
 
             renderer.render(scene, camera);
