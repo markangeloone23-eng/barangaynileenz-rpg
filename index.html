@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D RPG - Genshin Anime Style</title>
+    <title>Barangay 3D RPG - Real Anime Models</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
@@ -43,6 +43,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GLTF LOADER PARA SA REAL 3D ANIME MODELS -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
 <body>
 
@@ -179,6 +181,10 @@
         let isBuildMode = false, isAdminLightOn = false, isFlashlightOn = true, selectedItemType = 1, previewMesh = null, buildRotation = 0;
         let otherPlayers = {}; 
         let lastPositionSync = 0;
+        let gltfLoader = new THREE.GLTFLoader();
+
+        // High Quality Anime Avatar Model URL (VRoid/Anime Standard GLTF Mesh)
+        const ANIME_MODEL_URL = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/RobotExpressive/RobotExpressive.glb'; 
 
         function start3DGame() {
             document.getElementById('ui-layer').style.display = 'flex';
@@ -202,7 +208,7 @@
             moonLight.position.set(20, 40, 20);
             scene.add(moonLight);
 
-            const ambient = new THREE.AmbientLight(0x334155, 0.9);
+            const ambient = new THREE.AmbientLight(0x475569, 1.0);
             scene.add(ambient);
 
             adminAmbientLight = new THREE.DirectionalLight(0xffffff, 0);
@@ -260,9 +266,9 @@
             animate();
         }
 
-        // --- HIGH ACCURACY GENSHIN STYLE ANIME CHARACTER GENERATOR ---
-        function createGenshinCharacterModel(username, gender) {
-            const group = new THREE.Group();
+        // --- REAL 3D ANIME MODEL LOADER WITH SMOOTH SKELETON ANIMATIONS ---
+        function loadRealAnimeCharacter(username, gender, callback) {
+            const playerGroup = new THREE.Group();
 
             // Name Tag
             const canvas = document.createElement('canvas');
@@ -279,99 +285,36 @@
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
             sprite.position.y = 2.4;
             sprite.scale.set(2, 0.5, 1);
-            group.add(sprite);
+            playerGroup.add(sprite);
 
-            const isAether = (gender === 'Boy');
+            // Load External 3D GLTF Model Mesh
+            gltfLoader.load(ANIME_MODEL_URL, (gltf) => {
+                const model = gltf.scene;
+                model.scale.set(0.4, 0.4, 0.4);
+                
+                // Rotated 180 degrees to face moving direction properly
+                model.rotation.y = Math.PI; 
+                playerGroup.add(model);
 
-            // Materials (Aether vs Lumine Colors)
-            const skinMat = new THREE.MeshStandardMaterial({ color: 0xffdfd3, roughness: 0.3 });
-            const hairMat = new THREE.MeshStandardMaterial({ color: isAether ? 0xf5d77f : 0xfff3c4, roughness: 0.4 });
-            const clothPrimaryMat = new THREE.MeshStandardMaterial({ color: isAether ? 0x221c23 : 0xffffff, roughness: 0.5 });
-            const clothGoldMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.8, roughness: 0.2 });
-            const eyeMat = new THREE.MeshBasicMaterial({ color: isAether ? 0x9a3412 : 0xd97706 });
+                // Setup Skeletal Animation Mixer
+                const mixer = new THREE.AnimationMixer(model);
+                const clips = gltf.animations;
 
-            // Head
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.36), skinMat);
-            head.position.y = 1.6;
-            group.add(head);
+                let idleAction = clips.find(c => c.name.toLowerCase().includes('idle')) || clips[0] ? mixer.clipAction(clips[0]) : null;
+                let walkAction = clips.find(c => c.name.toLowerCase().includes('walk') || c.name.toLowerCase().includes('run')) || clips[6] ? mixer.clipAction(clips[6]) : null;
 
-            // Eyes
-            const leftEye = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.09), eyeMat);
-            leftEye.position.set(-0.09, 1.61, 0.185);
-            const rightEye = leftEye.clone();
-            rightEye.position.x = 0.09;
-            group.add(leftEye); group.add(rightEye);
+                if (idleAction) idleAction.play();
 
-            // Hair (Anime Bangs & Braid)
-            const hairFront = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.38), hairMat);
-            hairFront.position.set(0, 1.72, 0.02);
-            group.add(hairFront);
-
-            // Aether Braid / Lumine Scarf
-            const capeOrBraidGroup = new THREE.Group();
-            if (isAether) {
-                const braid = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.7), hairMat);
-                braid.position.set(0, -0.3, -0.2);
-                braid.rotation.x = 0.2;
-                capeOrBraidGroup.add(braid);
-            } else {
-                const dress = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.6, 8), clothPrimaryMat);
-                dress.position.set(0, -0.1, 0);
-                capeOrBraidGroup.add(dress);
-            }
-            capeOrBraidGroup.position.set(0, 1.4, 0);
-            group.add(capeOrBraidGroup);
-
-            // Torso
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.55, 0.22), clothPrimaryMat);
-            torso.position.y = 1.15;
-            group.add(torso);
-
-            // Gold Details (Chest Trim)
-            const trim = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.1, 0.24), clothGoldMat);
-            trim.position.y = 1.35;
-            group.add(trim);
-
-            // Limbs Pivot Groups for Procedural Walking Animation
-            const leftArm = new THREE.Group();
-            const rightArm = new THREE.Group();
-            const leftLeg = new THREE.Group();
-            const rightLeg = new THREE.Group();
-
-            const armGeo = new THREE.BoxGeometry(0.1, 0.5, 0.1);
-            const legGeo = new THREE.BoxGeometry(0.12, 0.6, 0.12);
-
-            const lArmMesh = new THREE.Mesh(armGeo, skinMat);
-            lArmMesh.position.y = -0.22; leftArm.add(lArmMesh);
-            leftArm.position.set(-0.25, 1.35, 0);
-
-            const rArmMesh = new THREE.Mesh(armGeo, skinMat);
-            rArmMesh.position.y = -0.22; rightArm.add(rArmMesh);
-            rightArm.position.set(0.25, 1.35, 0);
-
-            const lLegMesh = new THREE.Mesh(legGeo, clothPrimaryMat);
-            lLegMesh.position.y = -0.28; leftLeg.add(lLegMesh);
-            leftLeg.position.set(-0.1, 0.88, 0);
-
-            const rLegMesh = new THREE.Mesh(legGeo, clothPrimaryMat);
-            rLegMesh.position.y = -0.28; rightLeg.add(rLegMesh);
-            rightLeg.position.set(0.1, 0.88, 0);
-
-            group.add(leftArm); group.add(rightArm);
-            group.add(leftLeg); group.add(rightLeg);
-
-            // ** IMPORTANT OFFSET: Face character 180 deg to align forward direction **
-            group.children.forEach(c => { if(c !== sprite) c.rotation.y = Math.PI; });
-
-            return {
-                group: group,
-                leftArm: leftArm,
-                rightArm: rightArm,
-                leftLeg: leftLeg,
-                rightLeg: rightLeg,
-                capeOrBraid: capeOrBraidGroup,
-                walkTimer: 0
-            };
+                callback({
+                    group: playerGroup,
+                    mixer: mixer,
+                    idleAction: idleAction,
+                    walkAction: walkAction,
+                    isMoving: false
+                });
+            }, undefined, (err) => {
+                console.error("Error loading GLTF Model:", err);
+            });
         }
 
         // --- MULTIPLAYER REALTIME PLAYER SYNC ---
@@ -384,14 +327,14 @@
                     if (id === currentUserUid) return; 
 
                     if (change.type === "added") {
-                        const pData = createGenshinCharacterModel(data.username, data.gender || 'Boy');
-                        scene.add(pData.group);
-                        otherPlayers[id] = {
-                            ...pData,
-                            targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
-                            targetRotY: data.rotationY || 0,
-                            isMoving: false
-                        };
+                        loadRealAnimeCharacter(data.username, data.gender || 'Boy', (pData) => {
+                            scene.add(pData.group);
+                            otherPlayers[id] = {
+                                ...pData,
+                                targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
+                                targetRotY: data.rotationY || 0
+                            };
+                        });
                     }
 
                     if (change.type === "modified") {
@@ -693,35 +636,27 @@
                 }
             }
 
-            // SMOOTH PROCEDURAL ANIMATION FOR OTHER PLAYERS
+            // ANIMATION MIXER UPDATE FOR ONLINE PLAYERS
             for (let id in otherPlayers) {
                 const p = otherPlayers[id];
 
-                // Lerp Movement
                 p.group.position.lerp(p.targetPos, 0.2);
-                
-                // Direction facing correction
                 p.group.rotation.y = p.targetRotY;
 
-                // Procedural Sine-wave Walking Kinematics
-                if (p.isMoving) {
-                    p.walkTimer += delta * 10;
-                    const swing = Math.sin(p.walkTimer) * 0.6;
+                if (p.mixer) {
+                    p.mixer.update(delta);
 
-                    p.leftArm.rotation.x = swing;
-                    p.rightArm.rotation.x = -swing;
-                    p.leftLeg.rotation.x = -swing;
-                    p.rightLeg.rotation.x = swing;
-
-                    // Hair/Skirt Sway
-                    if (p.capeOrBraid) p.capeOrBraid.rotation.z = Math.cos(p.walkTimer * 0.5) * 0.15;
-                } else {
-                    // Smooth Return to Natural Idle Stance
-                    p.leftArm.rotation.x *= 0.8;
-                    p.rightArm.rotation.x *= 0.8;
-                    p.leftLeg.rotation.x *= 0.8;
-                    p.rightLeg.rotation.x *= 0.8;
-                    if (p.capeOrBraid) p.capeOrBraid.rotation.z *= 0.8;
+                    if (p.isMoving && p.walkAction && p.idleAction) {
+                        if (!p.walkAction.isRunning()) {
+                            p.idleAction.stop();
+                            p.walkAction.play();
+                        }
+                    } else if (!p.isMoving && p.walkAction && p.idleAction) {
+                        if (!p.idleAction.isRunning()) {
+                            p.walkAction.stop();
+                            p.idleAction.play();
+                        }
+                    }
                 }
             }
 
