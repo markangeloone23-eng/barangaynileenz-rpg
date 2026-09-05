@@ -39,9 +39,8 @@
         #chat-send { background: #9b2c2c; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
     </style>
 
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <!-- SUPABASE & THREE.JS LIBRARIES -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 </head>
@@ -102,18 +101,10 @@
     <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon | F: Flashlight | ENTER: Chat</small></div>
 
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBvO_hpTfhHRf-J2Qy7yLgcdEZ7V5vomb4",
-            authDomain: "barangaynileenz-rpg.firebaseapp.com",
-            projectId: "barangaynileenz-rpg",
-            storageBucket: "barangaynileenz-rpg.firebasestorage.app",
-            messagingSenderId: "327162460431",
-            appId: "1:327162460431:web:e16c66026e4df0ea5c667a"
-        };
-
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        // --- SUPABASE CONFIGURATION ---
+        const SUPABASE_URL = "https://nivabepmcadfnkwoklmi.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_nH139K1f23A9YOPSAd0hNg_adIpQHMO";
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let isRegisterMode = false, selectedGender = "Boy", currentUserUid = null, currentUsername = "User", isAdmin = false;
         let isChatActive = false;
@@ -138,35 +129,41 @@
 
             if (isRegisterMode) {
                 const username = document.getElementById('username').value.trim();
-                try {
-                    const res = await auth.createUserWithEmailAndPassword(email, pass);
-                    await db.collection('users').doc(res.user.uid).set({ username: username || "Player", gender: "", money: 600, isAdmin: false });
-                } catch(e) { alert(e.message); }
+                const { data, error } = await supabaseClient.auth.signUp({ email, password: pass });
+                if (error) return alert(error.message);
+                
+                if (data.user) {
+                    await supabaseClient.from('users').insert([
+                        { id: data.user.id, username: username || "Player", gender: "", money: 600, is_admin: false }
+                    ]);
+                    alert("Registration successful!");
+                }
             } else {
-                try { await auth.signInWithEmailAndPassword(email, pass); } catch(e) { alert(e.message); }
+                const { error } = await supabaseClient.auth.signInWithPassword({ email, password: pass });
+                if (error) alert(error.message);
             }
         }
 
-        auth.onAuthStateChanged(user => {
-            if (user) {
-                currentUserUid = user.uid;
+        // Auth state listener
+        supabaseClient.auth.onAuthStateChange(async (event, session) => {
+            if (session && session.user) {
+                currentUserUid = session.user.id;
                 document.getElementById('auth-screen').style.display = 'none';
-                db.collection('users').doc(currentUserUid).get().then(doc => {
-                    const data = doc.data();
-                    if (data) {
-                        currentUsername = data.username || "Player";
-                        document.getElementById('display-name').innerText = currentUsername;
-                        isAdmin = data.isAdmin || false;
-                        if (isAdmin) document.getElementById('admin-badge').style.display = 'inline-block';
-                        if (data.gender) start3DGame();
-                        else document.getElementById('story-screen').style.display = 'block';
-                    }
-                });
+                
+                const { data, error } = await supabaseClient.from('users').select('*').eq('id', currentUserUid).single();
+                if (data) {
+                    currentUsername = data.username || "Player";
+                    document.getElementById('display-name').innerText = currentUsername;
+                    isAdmin = data.is_admin || false;
+                    if (isAdmin) document.getElementById('admin-badge').style.display = 'inline-block';
+                    if (data.gender) start3DGame();
+                    else document.getElementById('story-screen').style.display = 'block';
+                }
             }
         });
 
         async function confirmCharacterSelection() {
-            await db.collection('users').doc(currentUserUid).update({ gender: selectedGender });
+            await supabaseClient.from('users').update({ gender: selectedGender }).eq('id', currentUserUid);
             document.getElementById('story-screen').style.display = 'none';
             start3DGame();
         }
@@ -196,7 +193,6 @@
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Set initial camera position on top of the terrain
             const startY = getTerrainHeight(0, 0) + 1.7;
             camera.position.set(0, startY, 0);
 
@@ -225,10 +221,7 @@
             flashlight.position.set(0, 0, 0);
             scene.add(camera);
 
-            // CREATE PROVINCE TERRAIN (BUNDOK AT ROLLING HILLS)
             createProvinceTerrain();
-            
-            // INALIS MUNA ANG AUTOMATIC SQUATTERS HOUSES
             loadSavedStructures();
 
             listenToOnlinePlayers();
@@ -269,12 +262,10 @@
             animate();
         }
 
-        // --- PROVINCE TERRAIN HEIGHT FORMULA (BUNDOK) ---
         function getTerrainHeight(x, z) {
-            // Complex Sine Wave / Noise para sa Hills & Mountains
             let height = Math.sin(x * 0.03) * Math.cos(z * 0.03) * 6.0;
             height += Math.sin(x * 0.08 + z * 0.05) * 2.5;
-            height += Math.cos(x * 0.015) * Math.sin(z * 0.015) * 12.0; // Bagong maliit na bundok
+            height += Math.cos(x * 0.015) * Math.sin(z * 0.015) * 12.0;
             return height;
         }
 
@@ -293,9 +284,8 @@
 
             geo.computeVertexNormals();
 
-            // Grass/Soil Grass Material para sa Probinsya
             const terrainMat = new THREE.MeshStandardMaterial({
-                color: 0x1c3d21, // Deep Grass Green
+                color: 0x1c3d21,
                 roughness: 0.95,
                 metalness: 0.05,
                 flatShading: true
@@ -305,7 +295,6 @@
             scene.add(terrain);
         }
 
-        // --- REAL 3D ANIME MODEL LOADER ---
         function loadRealAnimeCharacter(username, gender, callback) {
             const playerGroup = new THREE.Group();
 
@@ -349,77 +338,86 @@
             });
         }
 
-        // --- MULTIPLAYER ---
+        // --- MULTIPLAYER (SUPABASE REALTIME) ---
         function listenToOnlinePlayers() {
-            db.collection('online_players').onSnapshot(snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    const id = change.doc.id;
-                    const data = change.doc.data();
+            supabaseClient
+                .channel('public:online_players')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'online_players' }, payload => {
+                    const id = payload.new ? payload.new.id : payload.old.id;
+                    if (id === currentUserUid) return;
 
-                    if (id === currentUserUid) return; 
-
-                    if (change.type === "added") {
+                    if (payload.eventType === 'INSERT') {
+                        const data = payload.new;
                         loadRealAnimeCharacter(data.username, data.gender || 'Boy', (pData) => {
                             scene.add(pData.group);
                             otherPlayers[id] = {
                                 ...pData,
                                 targetPos: new THREE.Vector3(data.x, data.y - 1.7, data.z),
-                                targetRotY: data.rotationY || 0
+                                targetRotY: data.rotation_y || 0
                             };
                         });
-                    }
-
-                    if (change.type === "modified") {
+                    } else if (payload.eventType === 'UPDATE') {
+                        const data = payload.new;
                         if (otherPlayers[id]) {
                             otherPlayers[id].targetPos.set(data.x, data.y - 1.7, data.z);
-                            otherPlayers[id].targetRotY = data.rotationY || 0;
-                            otherPlayers[id].isMoving = data.isMoving || false;
+                            otherPlayers[id].targetRotY = data.rotation_y || 0;
+                            otherPlayers[id].isMoving = data.is_moving || false;
                         }
-                    }
-
-                    if (change.type === "removed") {
+                    } else if (payload.eventType === 'DELETE') {
                         if (otherPlayers[id]) {
                             scene.remove(otherPlayers[id].group);
                             delete otherPlayers[id];
                         }
                     }
-                });
-            });
+                })
+                .subscribe();
 
-            window.addEventListener('beforeunload', () => {
-                if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
+            window.addEventListener('beforeunload', async () => {
+                if (currentUserUid) await supabaseClient.from('online_players').delete().eq('id', currentUserUid);
             });
         }
 
-        function broadcastPlayerPosition() {
+        async function broadcastPlayerPosition() {
             if (!currentUserUid) return;
             const isMoving = moveForward || moveBackward || moveLeft || moveRight;
-            db.collection('online_players').doc(currentUserUid).set({
+            await supabaseClient.from('online_players').upsert({
+                id: currentUserUid,
                 username: currentUsername,
                 gender: selectedGender,
                 x: camera.position.x,
                 y: camera.position.y,
                 z: camera.position.z,
-                rotationY: yaw,
-                isMoving: isMoving,
-                lastSeen: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
+                rotation_y: yaw,
+                is_moving: isMoving,
+                last_seen: new Date().toISOString()
+            });
         }
 
-        // --- CHAT SYSTEM ---
-        function listenToChatMessages() {
-            db.collection('global_chat').orderBy('timestamp', 'desc').limit(20).onSnapshot(snapshot => {
-                const chatBox = document.getElementById('chat-messages');
-                chatBox.innerHTML = '';
-                let messages = [];
-                snapshot.forEach(doc => messages.push(doc.data()));
-                messages.reverse().forEach(msg => {
-                    const el = document.createElement('div');
-                    el.innerHTML = `<strong style="color:#fca5a5;">${msg.username}:</strong> ${msg.text}`;
-                    chatBox.appendChild(el);
-                });
-                chatBox.scrollTop = chatBox.scrollHeight;
-            });
+        // --- CHAT SYSTEM (SUPABASE) ---
+        async function listenToChatMessages() {
+            const { data } = await supabaseClient.from('global_chat').select('*').order('created_at', { ascending: false }).limit(20);
+            if (data) renderChatMessages(data.reverse());
+
+            supabaseClient
+                .channel('public:global_chat')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'global_chat' }, payload => {
+                    appendSingleChatMessage(payload.new);
+                })
+                .subscribe();
+        }
+
+        function renderChatMessages(messages) {
+            const chatBox = document.getElementById('chat-messages');
+            chatBox.innerHTML = '';
+            messages.forEach(msg => appendSingleChatMessage(msg));
+        }
+
+        function appendSingleChatMessage(msg) {
+            const chatBox = document.getElementById('chat-messages');
+            const el = document.createElement('div');
+            el.innerHTML = `<strong style="color:#fca5a5;">${msg.username}:</strong> ${msg.text}`;
+            chatBox.appendChild(el);
+            chatBox.scrollTop = chatBox.scrollHeight;
         }
 
         async function sendChatMessage() {
@@ -427,14 +425,12 @@
             const text = input.value.trim();
             if (!text) return;
             input.value = '';
-            await db.collection('global_chat').add({
-                username: currentUsername,
-                text: text,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            await supabaseClient.from('global_chat').insert([
+                { username: currentUsername, text: text }
+            ]);
         }
 
-        // --- BUILD MESHES ---
+        // --- BUILD MESHES & MAP ---
         function createStructureMesh(type, isPreview = false) {
             const group = new THREE.Group();
             let op = isPreview ? 0.5 : 1.0;
@@ -483,22 +479,34 @@
 
         async function placeStructure() {
             const groundY = getTerrainHeight(previewMesh.position.x, previewMesh.position.z);
-            await db.collection('world_map').add({ type: selectedItemType, x: previewMesh.position.x, y: groundY, z: previewMesh.position.z, rotY: previewMesh.rotation.y });
+            await supabaseClient.from('world_map').insert([
+                { type: selectedItemType, x: previewMesh.position.x, y: groundY, z: previewMesh.position.z, rot_y: previewMesh.rotation.y }
+            ]);
         }
 
-        function loadSavedStructures() {
-            db.collection('world_map').onSnapshot(snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    if (change.type === "added") {
-                        const data = change.doc.data();
-                        const obj = createStructureMesh(data.type, false);
-                        const posY = data.y !== undefined ? data.y : getTerrainHeight(data.x, data.z);
-                        obj.position.set(data.x, posY, data.z);
-                        obj.rotation.y = data.rotY;
-                        scene.add(obj);
-                    }
+        async function loadSavedStructures() {
+            const { data } = await supabaseClient.from('world_map').select('*');
+            if (data) {
+                data.forEach(item => {
+                    const obj = createStructureMesh(item.type, false);
+                    const posY = item.y !== undefined ? item.y : getTerrainHeight(item.x, item.z);
+                    obj.position.set(item.x, posY, item.z);
+                    obj.rotation.y = item.rot_y || 0;
+                    scene.add(obj);
                 });
-            });
+            }
+
+            supabaseClient
+                .channel('public:world_map')
+                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'world_map' }, payload => {
+                    const data = payload.new;
+                    const obj = createStructureMesh(data.type, false);
+                    const posY = data.y !== undefined ? data.y : getTerrainHeight(data.x, data.z);
+                    obj.position.set(data.x, posY, data.z);
+                    obj.rotation.y = data.rot_y || 0;
+                    scene.add(obj);
+                })
+                .subscribe();
         }
 
         function onKey(code, state) {
@@ -571,7 +579,6 @@
                 else stamina = Math.min(100, stamina + delta * 15);
                 document.getElementById('stamina-bar').style.width = stamina + "%";
 
-                // Movement Logic with Terrain Elevation
                 const dir = new THREE.Vector3();
                 if (moveForward) dir.z -= 1;
                 if (moveBackward) dir.z += 1;
@@ -582,7 +589,6 @@
                 dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
                 camera.position.addScaledVector(dir, speed * delta);
 
-                // Terrain Elevation Check
                 const currentGroundY = getTerrainHeight(camera.position.x, camera.position.z);
                 const targetCameraY = currentGroundY + 1.7;
 
@@ -608,7 +614,6 @@
                 }
             }
 
-            // ANIMATION MIXER & POSITIONS FOR MULTIPLAYER
             for (let id in otherPlayers) {
                 const p = otherPlayers[id];
 
@@ -635,9 +640,10 @@
             renderer.render(scene, camera);
         }
 
-        function logout() { 
-            if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
-            auth.signOut().then(() => location.reload()); 
+        async function logout() { 
+            if (currentUserUid) await supabaseClient.from('online_players').delete().eq('id', currentUserUid);
+            await supabaseClient.auth.signOut();
+            location.reload(); 
         }
     </script>
 </body>
