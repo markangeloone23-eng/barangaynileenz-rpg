@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Barangay 3D Horror RPG</title>
+    <title>Barangay 3D Horror RPG - Multiplayer & Live Chat</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { background-color: #000; color: white; overflow: hidden; user-select: none; }
+        body { background-color: #020307; color: white; overflow: hidden; user-select: none; }
         
         .auth-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); padding: 30px; border-radius: 12px; width: 380px; text-align: center; border: 2px solid #9b2c2c; z-index: 100; }
         .auth-container h2 { margin-bottom: 15px; color: #e53e3e; }
@@ -30,6 +30,14 @@
         #admin-badge { display: none; background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; font-weight: bold; }
         #stamina-container { width: 160px; height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 6px; border: 1px solid #475569; }
         #stamina-bar { width: 100%; height: 100%; background: #eab308; }
+
+        /* LIVE CHAT SYSTEM STYLES */
+        #chat-container { display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; height: 200px; background: rgba(15, 23, 42, 0.85); border: 1px solid #374151; border-radius: 8px; z-index: 20; padding: 10px; display: flex; flex-direction: column; pointer-events: auto; }
+        #chat-messages { flex: 1; overflow-y: auto; font-size: 13px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+        #chat-messages div { word-wrap: break-word; }
+        #chat-input-container { display: flex; gap: 5px; }
+        #chat-input { flex: 1; background: #1f2937; border: 1px solid #4b5563; color: white; padding: 6px; border-radius: 4px; font-size: 12px; }
+        #chat-send { background: #9b2c2c; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
     </style>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -67,23 +75,32 @@
 
     <div id="ui-layer">
         <div>
-            <div><strong>Player:</strong> <span id="display-name" style="color: #fca5a5;">Leenz</span> <span id="admin-badge">ADMIN</span> | <strong>Pera:</strong> ₱<span id="display-money" style="color: #fef08a;">600</span></div>
+            <div><strong>Player:</strong> <span id="display-name" style="color: #fca5a5;">User</span> <span id="admin-badge">ADMIN</span> | <strong>Pera:</strong> ₱<span id="display-money" style="color: #fef08a;">600</span></div>
             <div id="stamina-container"><div id="stamina-bar"></div></div>
         </div>
         <button onclick="logout()" style="background: #9b2c2c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; pointer-events: auto;">Logout</button>
     </div>
 
     <div id="build-menu">
-        <div style="margin-bottom: 5px; color: #ef4444; font-weight: bold;">ADMIN BUILD & LIGHTING PANEL</div>
+        <div style="margin-bottom: 5px; color: #ef4444; font-weight: bold;">SKWATERS AREA BUILDER</div>
         <span class="build-item active" id="item-1">[1] Curved Streetlight</span>
-        <span class="build-item" id="item-2">[2] Pinoy Tree</span>
-        <span class="build-item" id="item-3">[3] Concrete House</span>
-        <span class="build-item" id="item-4">[4] Barangay Hall</span>
-        <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Toggle Admin Light</span> | [R] Rotate | [Click] Place</div>
+        <span class="build-item" id="item-2">[2] Skwaters House (Yero)</span>
+        <span class="build-item" id="item-3">[3] Concrete Double House</span>
+        <span class="build-item" id="item-4">[4] Posteng Kawayan/Puno</span>
+        <div style="font-size: 11px; margin-top: 5px; color: #aaa;">[B] Toggle Menu | <span style="color:#fef08a;">[L] Admin Full Light</span> | [R] Rotate | [Click] Place</div>
+    </div>
+
+    <!-- LIVE CHAT BOX -->
+    <div id="chat-container">
+        <div id="chat-messages"></div>
+        <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Type a message... (Press Enter)" onfocus="isChatActive=true" onblur="isChatActive=false">
+            <button id="chat-send" onclick="sendChatMessage()">Send</button>
+        </div>
     </div>
 
     <div id="crosshair">+</div>
-    <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon</small></div>
+    <div id="click-prompt">I-CLICK ANG SCREEN PARA MAGLARO<br><small id="controls-hint" style="color: #ccc; font-weight: normal;">WASD: Lakad | SHIFT: Takbo | SPACE: Talon | ENTER: Chat</small></div>
 
     <script>
         const firebaseConfig = {
@@ -99,7 +116,8 @@
         const auth = firebase.auth();
         const db = firebase.firestore();
 
-        let isRegisterMode = false, selectedGender = "Boy", currentUserUid = null, isAdmin = false;
+        let isRegisterMode = false, selectedGender = "Boy", currentUserUid = null, currentUsername = "User", isAdmin = false;
+        let isChatActive = false;
 
         function toggleAuthMode() {
             isRegisterMode = !isRegisterMode;
@@ -123,7 +141,7 @@
                 const username = document.getElementById('username').value.trim();
                 try {
                     const res = await auth.createUserWithEmailAndPassword(email, pass);
-                    await db.collection('users').doc(res.user.uid).set({ username: username, gender: "", money: 600, isAdmin: false });
+                    await db.collection('users').doc(res.user.uid).set({ username: username || "Player", gender: "", money: 600, isAdmin: false });
                 } catch(e) { alert(e.message); }
             } else {
                 try { await auth.signInWithEmailAndPassword(email, pass); } catch(e) { alert(e.message); }
@@ -137,10 +155,11 @@
                 db.collection('users').doc(currentUserUid).get().then(doc => {
                     const data = doc.data();
                     if (data) {
+                        currentUsername = data.username || "Player";
+                        document.getElementById('display-name').innerText = currentUsername;
                         isAdmin = data.isAdmin || false;
                         if (isAdmin) {
                             document.getElementById('admin-badge').style.display = 'inline-block';
-                            document.getElementById('controls-hint').innerHTML = "WASD: Lakad | SHIFT: Takbo | <span style='color:#ef4444; font-weight:bold;'>B: Build Mode | L: Admin Light Toggle</span>";
                         }
                         if (data.gender) start3DGame();
                         else document.getElementById('story-screen').style.display = 'block';
@@ -155,22 +174,25 @@
             start3DGame();
         }
 
-        // --- ENHANCED GRAPHICS ENGINE ---
+        // --- GAME & MULTIPLAYER ENGINE ---
         let scene, camera, renderer, flashlight, flashlightTarget, adminAmbientLight;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, isSprinting = false;
         let canJump = true, velocityY = 0, gravity = -18.0, stamina = 100;
         let prevTime = performance.now(), yaw = 0, pitch = 0, isPointerLocked = false;
 
         let isBuildMode = false, isAdminLightOn = false, selectedItemType = 1, previewMesh = null, buildRotation = 0;
+        let otherPlayers = {}; // Object for tracking remote 3D player models
+        let lastPositionSync = 0;
 
         function start3DGame() {
             document.getElementById('ui-layer').style.display = 'flex';
+            document.getElementById('chat-container').style.display = 'flex';
             document.getElementById('crosshair').style.display = 'block';
             document.getElementById('click-prompt').style.display = 'block';
 
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x020307);
-            scene.fog = new THREE.FogExp2(0x020307, 0.025);
+            scene.background = new THREE.Color(0x02040a); 
+            scene.fog = new THREE.FogExp2(0x02040a, 0.03);
 
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1.7, 10);
@@ -180,32 +202,35 @@
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Dark Night Ambient
-            const ambient = new THREE.AmbientLight(0x0f172a, 0.4);
+            const moonLight = new THREE.DirectionalLight(0x1e293b, 0.3);
+            moonLight.position.set(20, 40, 20);
+            scene.add(moonLight);
+
+            const ambient = new THREE.AmbientLight(0x0a0f1d, 0.5);
             scene.add(ambient);
 
-            // Toggleable Bright Admin Light
             adminAmbientLight = new THREE.DirectionalLight(0xffffff, 0);
-            adminAmbientLight.position.set(10, 50, 10);
+            adminAmbientLight.position.set(0, 50, 0);
             scene.add(adminAmbientLight);
 
-            // Realistic Flashlight
-            flashlight = new THREE.SpotLight(0xfffbe8, 6, 35, Math.PI / 5, 0.3, 1);
+            flashlight = new THREE.SpotLight(0xfffae6, 7, 30, Math.PI / 4.5, 0.4, 1);
             flashlightTarget = new THREE.Object3D();
             scene.add(flashlightTarget);
             flashlight.target = flashlightTarget;
             camera.add(flashlight);
-            flashlight.position.set(0.3, -0.2, 0);
+            flashlight.position.set(0.2, -0.2, 0);
             scene.add(camera);
 
-            // REALISTIC ROAD & DIRT/GRASS GROUND
-            createEnvironmentGround();
-
-            // Load Saved Map Items
+            createPhilippineTerrain();
+            generateDefaultSquattersArea();
             loadSavedStructures();
 
-            // Event Listeners
-            document.body.addEventListener('click', () => {
+            // Real-Time Multiplayer Syncing
+            listenToOnlinePlayers();
+            listenToChatMessages();
+
+            document.body.addEventListener('click', (e) => {
+                if (e.target.closest('#chat-container')) return; // Allow clicking chat
                 if (!isPointerLocked) {
                     document.body.requestPointerLock();
                 } else if (isAdmin && isBuildMode && previewMesh) {
@@ -219,7 +244,7 @@
             });
 
             document.addEventListener('mousemove', (e) => {
-                if (!isPointerLocked) return;
+                if (!isPointerLocked || isChatActive) return;
                 yaw -= e.movementX * 0.0025;
                 pitch -= e.movementY * 0.0025;
                 pitch = Math.max(-Math.PI / 2.8, Math.min(Math.PI / 2.8, pitch));
@@ -239,24 +264,265 @@
             animate();
         }
 
-        function createEnvironmentGround() {
-            // Main Concrete Asphalt Road
-            const roadGeo = new THREE.PlaneGeometry(10, 200);
-            const roadMat = new THREE.MeshStandardMaterial({ color: 0x262626, roughness: 0.95 });
+        // --- REALTIME MULTIPLAYER PLAYER SYNC ---
+        function listenToOnlinePlayers() {
+            db.collection('online_players').onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    const id = change.doc.id;
+                    const data = change.doc.data();
+
+                    if (id === currentUserUid) return; // Skip own character
+
+                    if (change.type === "added" || change.type === "modified") {
+                        if (!otherPlayers[id]) {
+                            // Create 3D Avatar Model for foreign player
+                            const avatar = createPlayerAvatarMesh(data.username, data.gender);
+                            scene.add(avatar);
+                            otherPlayers[id] = avatar;
+                        }
+                        // Update player coordinates and rotation smoothly
+                        otherPlayers[id].position.set(data.x, data.y - 1.7, data.z);
+                        otherPlayers[id].rotation.y = data.rotationY || 0;
+                    }
+
+                    if (change.type === "removed") {
+                        if (otherPlayers[id]) {
+                            scene.remove(otherPlayers[id]);
+                            delete otherPlayers[id];
+                        }
+                    }
+                });
+            });
+
+            // Clean up player state on window unload
+            window.addEventListener('beforeunload', () => {
+                if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
+            });
+        }
+
+        function createPlayerAvatarMesh(username, gender) {
+            const group = new THREE.Group();
+            
+            // Body Mesh (Blue for Boy, Pink for Girl)
+            const color = gender === "Girl" ? 0xec4899 : 0x3b82f6;
+            const bodyGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.4);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: color });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.7;
+            group.add(body);
+
+            // Head Mesh
+            const headGeo = new THREE.SphereGeometry(0.25, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xffdbac });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = 1.6;
+            group.add(head);
+
+            // Name Tag Canvas Sprite above Head
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, 256, 64);
+            ctx.font = 'Bold 28px Arial';
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.fillText(username, 128, 42);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.position.y = 2.2;
+            sprite.scale.set(2, 0.5, 1);
+            group.add(sprite);
+
+            return group;
+        }
+
+        function broadcastPlayerPosition() {
+            if (!currentUserUid) return;
+            db.collection('online_players').doc(currentUserUid).set({
+                username: currentUsername,
+                gender: selectedGender,
+                x: camera.position.x,
+                y: camera.position.y,
+                z: camera.position.z,
+                rotationY: yaw,
+                lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+        }
+
+        // --- REALTIME CHAT SYSTEM ---
+        function listenToChatMessages() {
+            db.collection('global_chat').orderBy('timestamp', 'desc').limit(20).onSnapshot(snapshot => {
+                const chatBox = document.getElementById('chat-messages');
+                chatBox.innerHTML = '';
+                let messages = [];
+                snapshot.forEach(doc => messages.push(doc.data()));
+                messages.reverse().forEach(msg => {
+                    const el = document.createElement('div');
+                    el.innerHTML = `<strong style="color:#fca5a5;">${msg.username}:</strong> ${msg.text}`;
+                    chatBox.appendChild(el);
+                });
+                chatBox.scrollTop = chatBox.scrollHeight;
+            });
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            await db.collection('global_chat').add({
+                username: currentUsername,
+                text: text,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+
+        // --- REALISTIC PINOY TERRAIN & ROAD ---
+        function createPhilippineTerrain() {
+            const roadGeo = new THREE.PlaneGeometry(8, 200);
+            const roadMat = new THREE.MeshStandardMaterial({ color: 0x1f1f22, roughness: 0.9 });
             const road = new THREE.Mesh(roadGeo, roadMat);
             road.rotation.x = -Math.PI / 2;
             scene.add(road);
 
-            // Side Dirt & Grass Terrain
-            const dirtGeo = new THREE.PlaneGeometry(150, 200);
-            const dirtMat = new THREE.MeshStandardMaterial({ color: 0x0f1712, roughness: 1.0 });
+            const curbMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, roughness: 0.8 });
+            const leftCurb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 200), curbMat);
+            leftCurb.position.set(-4.3, 0.1, 0);
+            scene.add(leftCurb);
+
+            const rightCurb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.2, 200), curbMat);
+            rightCurb.position.set(4.3, 0.1, 0);
+            scene.add(rightCurb);
+
+            const dirtGeo = new THREE.PlaneGeometry(120, 200);
+            const dirtMat = new THREE.MeshStandardMaterial({ color: 0x0c0d0e, roughness: 1.0 });
             const dirt = new THREE.Mesh(dirtGeo, dirtMat);
             dirt.rotation.x = -Math.PI / 2;
-            dirt.position.y = -0.02;
+            dirt.position.y = -0.01;
             scene.add(dirt);
         }
 
+        function generateDefaultSquattersArea() {
+            for(let z = -80; z <= 80; z += 12) {
+                if(Math.abs(z) < 8) continue;
+                const houseL = createSquattersHouseMesh();
+                houseL.position.set(-7.5 - Math.random()*2, 0, z);
+                houseL.rotation.y = Math.PI / 2;
+                scene.add(houseL);
+
+                const houseR = createSquattersHouseMesh();
+                houseR.position.set(7.5 + Math.random()*2, 0, z + 4);
+                houseR.rotation.y = -Math.PI / 2;
+                scene.add(houseR);
+
+                if(z % 24 === 0) {
+                    const light = createStructureMesh(1, false);
+                    light.position.set(-4.1, 0, z);
+                    scene.add(light);
+                }
+            }
+        }
+
+        function createSquattersHouseMesh(isPreview = false) {
+            const group = new THREE.Group();
+            let op = isPreview ? 0.5 : 1.0;
+
+            const baseMat = new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x475569 : 0x334155, roughness: 0.9, transparent: isPreview, opacity: op });
+            const base = new THREE.Mesh(new THREE.BoxGeometry(5, 2.5, 4), baseMat);
+            base.position.y = 1.25;
+            group.add(base);
+
+            const yeroMat = new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x78350f : 0x1e293b, metalness: 0.6, roughness: 0.5, transparent: isPreview, opacity: op });
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.15, 4.4), yeroMat);
+            roof.position.set(0, 2.55, 0);
+            roof.rotation.z = (Math.random() - 0.5) * 0.1;
+            group.add(roof);
+
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1, 1.8, 0.1), new THREE.MeshStandardMaterial({ color: 0x1c1917 }));
+            door.position.set(1, 0.9, 2.01);
+            group.add(door);
+
+            const win = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+            win.position.set(-1.2, 1.5, 2.01);
+            group.add(win);
+
+            return group;
+        }
+
+        function createStructureMesh(type, isPreview = false) {
+            if (type === 2) return createSquattersHouseMesh(isPreview);
+            const group = new THREE.Group();
+            let op = isPreview ? 0.5 : 1.0;
+
+            if (type === 1) { 
+                const poleMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.8, transparent: isPreview, opacity: op });
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 4.8), poleMat);
+                pole.position.y = 2.4; group.add(pole);
+
+                const curve = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.06, 8, 16, Math.PI / 2), poleMat);
+                curve.position.set(0.6, 4.7, 0); curve.rotation.z = Math.PI / 2; group.add(curve);
+
+                const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.1, 0.15), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+                lamp.position.set(1.3, 4.6, 0); group.add(lamp);
+
+                if (!isPreview) {
+                    const spot = new THREE.SpotLight(0xfff5c0, 8, 16, Math.PI / 3, 0.5, 1);
+                    spot.position.set(1.3, 4.5, 0);
+                    const target = new THREE.Object3D();
+                    target.position.set(1.3, 0, 0);
+                    group.add(target);
+                    spot.target = target;
+                    group.add(spot);
+                }
+            } else if (type === 3) {
+                const h1 = createSquattersHouseMesh(isPreview);
+                const h2 = createSquattersHouseMesh(isPreview);
+                h2.position.set(0, 2.5, 0);
+                group.add(h1); group.add(h2);
+            } else if (type === 4) {
+                const tree = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 5), new THREE.MeshStandardMaterial({ color: 0x291d0e, transparent: isPreview, opacity: op }));
+                tree.position.y = 2.5; group.add(tree);
+            }
+            return group;
+        }
+
+        function createPreviewMesh() {
+            if (previewMesh) scene.remove(previewMesh);
+            previewMesh = createStructureMesh(selectedItemType, true);
+            previewMesh.visible = isBuildMode;
+            scene.add(previewMesh);
+        }
+
+        async function placeStructure() {
+            await db.collection('world_map').add({ type: selectedItemType, x: previewMesh.position.x, z: previewMesh.position.z, rotY: previewMesh.rotation.y });
+        }
+
+        function loadSavedStructures() {
+            db.collection('world_map').onSnapshot(snapshot => {
+                snapshot.docChanges().forEach(change => {
+                    if (change.type === "added") {
+                        const data = change.doc.data();
+                        const obj = createStructureMesh(data.type, false);
+                        obj.position.set(data.x, 0, data.z);
+                        obj.rotation.y = data.rotY;
+                        scene.add(obj);
+                    }
+                });
+            });
+        }
+
         function onKey(code, state) {
+            if (code === 'Enter' && state) {
+                if (isChatActive) sendChatMessage();
+                else document.getElementById('chat-input').focus();
+                return;
+            }
+
+            if (isChatActive) return; // Block game controls while typing
+
             if (code === 'KeyW') moveForward = state;
             if (code === 'KeyS') moveBackward = state;
             if (code === 'KeyA') moveLeft = state;
@@ -268,14 +534,12 @@
                 canJump = false;
             }
 
-            // ADMIN LIGHT TOGGLE (L Key)
             if (isAdmin && code === 'KeyL' && state) {
                 isAdminLightOn = !isAdminLightOn;
-                adminAmbientLight.intensity = isAdminLightOn ? 1.5 : 0;
-                scene.fog.density = isAdminLightOn ? 0.005 : 0.025;
+                adminAmbientLight.intensity = isAdminLightOn ? 1.8 : 0;
+                scene.fog.density = isAdminLightOn ? 0.005 : 0.03;
             }
 
-            // ADMIN BUILD TOGGLE (B Key)
             if (isAdmin && code === 'KeyB' && state) {
                 isBuildMode = !isBuildMode;
                 document.getElementById('build-menu').style.display = isBuildMode ? 'block' : 'none';
@@ -302,93 +566,6 @@
             createPreviewMesh();
         }
 
-        // --- HIGH DETAIL MODELS BASED ON YOUR INSPO PICS ---
-        function createStructureMesh(type, isPreview = false) {
-            const group = new THREE.Group();
-            let op = isPreview ? 0.5 : 1.0;
-
-            if (type === 1) { 
-                // CURVED PINOY STREETLIGHT (Kurbadong Poste)
-                const poleMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, roughness: 0.3, metalness: 0.8, transparent: isPreview, opacity: op });
-                
-                const poleVertical = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 5), poleMat);
-                poleVertical.position.y = 2.5; group.add(poleVertical);
-
-                const poleCurve = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.07, 8, 16, Math.PI / 2), poleMat);
-                poleCurve.position.set(0.7, 4.9, 0);
-                poleCurve.rotation.z = Math.PI / 2;
-                group.add(poleCurve);
-
-                const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.15, 0.2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-                lamp.position.set(1.5, 4.8, 0); group.add(lamp);
-
-                if (!isPreview) {
-                    const spot = new THREE.SpotLight(0xfffbeb, 8, 18, Math.PI / 3, 0.5, 1);
-                    spot.position.set(1.5, 4.7, 0);
-                    const target = new THREE.Object3D();
-                    target.position.set(1.5, 0, 0);
-                    group.add(target);
-                    spot.target = target;
-                    group.add(spot);
-                }
-            } else if (type === 2) { 
-                // PINOY TREE WITH LEAVES
-                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.4, 4), new THREE.MeshStandardMaterial({ color: 0x3f2e1e, transparent: isPreview, opacity: op }));
-                trunk.position.y = 2; group.add(trunk);
-
-                const leavesMat = new THREE.MeshStandardMaterial({ color: 0x143d19, roughness: 0.9, transparent: isPreview, opacity: op });
-                for(let i = 0; i < 3; i++) {
-                    const leaves = new THREE.Mesh(new THREE.SphereGeometry(1.6 - (i*0.3), 8, 8), leavesMat);
-                    leaves.position.set(0, 3.5 + (i * 0.9), 0);
-                    group.add(leaves);
-                }
-            } else if (type === 3) { 
-                // REALISTIC PINOY HOUSE (Yero Roof & Concrete)
-                const body = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 5), new THREE.MeshStandardMaterial({ color: 0x52525b, roughness: 0.8, transparent: isPreview, opacity: op }));
-                body.position.y = 1.5; group.add(body);
-
-                const roof = new THREE.Mesh(new THREE.ConeGeometry(4.5, 1.8, 4), new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, transparent: isPreview, opacity: op }));
-                roof.position.y = 3.9; roof.rotation.y = Math.PI / 4; group.add(roof);
-            } else if (type === 4) { 
-                // BARANGAY HALL (Blue/Yellow Inspo)
-                const bgy = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 6), new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.7, transparent: isPreview, opacity: op }));
-                bgy.position.y = 2; group.add(bgy);
-
-                const stripe = new THREE.Mesh(new THREE.BoxGeometry(8.1, 0.6, 6.1), new THREE.MeshStandardMaterial({ color: 0xeab308, transparent: isPreview, opacity: op }));
-                stripe.position.y = 3.2; group.add(stripe);
-            }
-            return group;
-        }
-
-        function createPreviewMesh() {
-            if (previewMesh) scene.remove(previewMesh);
-            previewMesh = createStructureMesh(selectedItemType, true);
-            previewMesh.visible = isBuildMode;
-            scene.add(previewMesh);
-        }
-
-        async function placeStructure() {
-            const x = previewMesh.position.x;
-            const z = previewMesh.position.z;
-            const rotY = previewMesh.rotation.y;
-
-            await db.collection('world_map').add({ type: selectedItemType, x: x, z: z, rotY: rotY });
-        }
-
-        function loadSavedStructures() {
-            db.collection('world_map').onSnapshot(snapshot => {
-                snapshot.docChanges().forEach(change => {
-                    if (change.type === "added") {
-                        const data = change.doc.data();
-                        const obj = createStructureMesh(data.type, false);
-                        obj.position.set(data.x, 0, data.z);
-                        obj.rotation.y = data.rotY;
-                        scene.add(obj);
-                    }
-                });
-            });
-        }
-
         function animate() {
             requestAnimationFrame(animate);
 
@@ -396,7 +573,7 @@
             const delta = (time - prevTime) / 1000;
             prevTime = time;
 
-            if (isPointerLocked) {
+            if (isPointerLocked && !isChatActive) {
                 let speed = isSprinting && stamina > 0 ? 8.0 : 4.5;
                 if (isSprinting) stamina = Math.max(0, stamina - delta * 30);
                 else stamina = Math.min(100, stamina + delta * 15);
@@ -425,12 +602,21 @@
                     const targetPos = camera.position.clone().add(frontDir);
                     previewMesh.position.set(targetPos.x, 0, targetPos.z);
                 }
+
+                // Broadcast player position to Database every 100ms
+                if (time - lastPositionSync > 100) {
+                    broadcastPlayerPosition();
+                    lastPositionSync = time;
+                }
             }
 
             renderer.render(scene, camera);
         }
 
-        function logout() { auth.signOut().then(() => location.reload()); }
+        function logout() { 
+            if (currentUserUid) db.collection('online_players').doc(currentUserUid).delete();
+            auth.signOut().then(() => location.reload()); 
+        }
     </script>
 </body>
 </html>
