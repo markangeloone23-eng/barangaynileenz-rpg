@@ -8,21 +8,27 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: #111; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
         
-        .auth-container { background: #2c3e50; padding: 30px; border-radius: 12px; width: 420px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
+        /* AUTH SCREEN */
+        .auth-container { background: #2c3e50; padding: 30px; border-radius: 12px; width: 380px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
         .auth-container h2 { margin-bottom: 15px; color: #f1c40f; }
         .auth-container input, .auth-container button { width: 100%; padding: 10px; margin: 6px 0; border-radius: 6px; border: none; }
         .auth-container button { background: #27ae60; color: white; font-weight: bold; cursor: pointer; }
         .toggle-btn { background: transparent !important; color: #bdc3c7 !important; text-decoration: underline; cursor: pointer; }
 
-        /* Genshin-style Visual Character Selection Cards */
-        .char-select-title { margin-top: 10px; font-size: 14px; color: #ecf0f1; font-weight: bold; }
-        .char-container { display: flex; justify-content: space-around; margin: 10px 0; }
-        .char-card { background: #34495e; border: 3px solid transparent; border-radius: 10px; padding: 10px; cursor: pointer; width: 45%; transition: 0.3s; }
-        .char-card:hover { transform: scale(1.05); }
-        .char-card.selected { border-color: #f1c40f; background: #111827; box-shadow: 0 0 10px #f1c40f; }
-        .char-card img { width: 70px; height: 70px; object-fit: contain; }
-        .char-card p { margin-top: 5px; font-weight: bold; font-size: 14px; }
+        /* STORYLINE & CHARACTER SELECTION SCREEN */
+        #story-screen { display: none; background: #1a252f; padding: 30px; border-radius: 12px; width: 600px; text-align: center; border: 3px solid #f1c40f; box-shadow: 0 0 20px rgba(241, 196, 15, 0.4); }
+        .story-text { font-size: 16px; line-height: 1.5; color: #ecf0f1; margin-bottom: 20px; background: #2c3e50; padding: 15px; border-radius: 8px; border-left: 5px solid #f1c40f; text-align: left; }
+        
+        .char-container { display: flex; justify-content: center; gap: 20px; margin: 20px 0; }
+        .char-card { background: #34495e; border: 3px solid #7f8c8d; border-radius: 10px; padding: 15px; cursor: pointer; width: 180px; transition: 0.3s; }
+        .char-card:hover { transform: translateY(-5px); border-color: #f1c40f; }
+        .char-card.selected { border-color: #f1c40f; background: #2c3e50; box-shadow: 0 0 15px #f1c40f; }
+        .char-card img { width: 90px; height: 90px; object-fit: contain; }
+        .char-card p { margin-top: 10px; font-weight: bold; font-size: 16px; color: #f1c40f; }
 
+        .start-btn { background: #e67e22; color: white; font-weight: bold; padding: 12px 30px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+
+        /* GAME SCREEN */
         #game-screen { display: none; flex-direction: column; align-items: center; }
         #ui-bar { background: #2c3e50; width: 800px; padding: 15px; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1c40f; }
         #game-canvas { background-color: #27ae60; border: 4px solid #2c3e50; }
@@ -38,7 +44,7 @@
 </head>
 <body>
 
-    <!-- AUTH & VISUAL CHARACTER SELECTION SCREEN -->
+    <!-- 1. AUTH SCREEN (PURE ACCOUNT CREATION) -->
     <div id="auth-screen" class="auth-container">
         <h2 id="auth-title">Barangay Login</h2>
         <input type="email" id="email" placeholder="Email (e.g. juan@gmail.com)">
@@ -46,25 +52,34 @@
         
         <div id="register-fields" style="display: none;">
             <input type="text" id="username" placeholder="Username (In-game Name)">
-            
-            <p class="char-select-title">PILIIN ANG IYONG CHARACTER:</p>
-            <div class="char-container">
-                <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
-                    <img src="https://img.icons8.com/3d-fluency/94/boy-1.png" alt="Boy">
-                    <p>Boy (Lalaki)</p>
-                </div>
-                <div class="char-card" id="card-girl" onclick="selectGender('Girl')">
-                    <img src="https://img.icons8.com/3d-fluency/94/girl-1.png" alt="Girl">
-                    <p>Girl (Babae)</p>
-                </div>
-            </div>
         </div>
 
         <button id="auth-btn" onclick="handleAuth()">LOGIN</button>
         <button class="toggle-btn" onclick="toggleAuthMode()">Wala pang account? Register</button>
     </div>
 
-    <!-- GAME SCREEN -->
+    <!-- 2. STORYLINE & VISUAL CHARACTER SELECTION -->
+    <div id="story-screen">
+        <h2 style="color: #f1c40f; margin-bottom: 15px;">Maligayang Pagdating sa Barangay!</h2>
+        <div class="story-text">
+            <strong>KAPITAN:</strong> "Magandang araw sa'yo, bagong salta! Bago ka magsimula sa buhay mo rito sa ating barangay, pumili ka muna ng iyong hitsura at kasarian."
+        </div>
+
+        <div class="char-container">
+            <div class="char-card selected" id="card-boy" onclick="selectGender('Boy')">
+                <img src="https://cdn-icons-png.flaticon.com/512/4140/4140048.png" alt="Boy">
+                <p>Boy (Lalaki)</p>
+            </div>
+            <div class="char-card" id="card-girl" onclick="selectGender('Girl')">
+                <img src="https://cdn-icons-png.flaticon.com/512/4140/4140047.png" alt="Girl">
+                <p>Girl (Babae)</p>
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="confirmCharacterSelection()">PASUKIN ANG BARANGAY</button>
+    </div>
+
+    <!-- 3. GAME SCREEN -->
     <div id="game-screen">
         <div id="ui-bar">
             <div><strong>Player:</strong> <span id="display-name">-</span> (<span id="display-gender">-</span>)</div>
@@ -103,12 +118,12 @@
         let currentPlayerData = null;
         let otherPlayers = {};
 
-        // Load Character Sprite Images
+        // Avatar Sprites
         const boyImg = new Image();
-        boyImg.src = "https://img.icons8.com/3d-fluency/94/boy-1.png";
+        boyImg.src = "https://cdn-icons-png.flaticon.com/512/4140/4140048.png";
 
         const girlImg = new Image();
-        girlImg.src = "https://img.icons8.com/3d-fluency/94/girl-1.png";
+        girlImg.src = "https://cdn-icons-png.flaticon.com/512/4140/4140047.png";
 
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
@@ -119,17 +134,17 @@
             { name: "Sugalan", x: 650, y: 50, w: 80, h: 80, color: "#f1c40f", type: "gambling" }
         ];
 
-        function selectGender(gender) {
-            selectedGender = gender;
-            document.getElementById('card-boy').classList.toggle('selected', gender === 'Boy');
-            document.getElementById('card-girl').classList.toggle('selected', gender === 'Girl');
-        }
-
         function toggleAuthMode() {
             isRegisterMode = !isRegisterMode;
             document.getElementById('auth-title').innerText = isRegisterMode ? "Gumawa ng Account" : "Barangay Login";
             document.getElementById('auth-btn').innerText = isRegisterMode ? "REGISTER" : "LOGIN";
             document.getElementById('register-fields').style.display = isRegisterMode ? "block" : "none";
+        }
+
+        function selectGender(gender) {
+            selectedGender = gender;
+            document.getElementById('card-boy').classList.toggle('selected', gender === 'Boy');
+            document.getElementById('card-girl').classList.toggle('selected', gender === 'Girl');
         }
 
         async function handleAuth() {
@@ -144,14 +159,14 @@
 
                 try {
                     const res = await auth.createUserWithEmailAndPassword(email, pass);
+                    // Save initial user without gender yet
                     await db.collection('users').doc(res.user.uid).set({
                         username: username,
-                        gender: selectedGender,
+                        gender: "", // To be selected in storyline
                         money: 500,
                         x: 100,
                         y: 100
                     });
-                    alert("Account Created!");
                 } catch (err) { alert(err.message); }
             } else {
                 try {
@@ -164,12 +179,32 @@
             if (user) {
                 currentUserUid = user.uid;
                 document.getElementById('auth-screen').style.display = 'none';
-                document.getElementById('game-screen').style.display = 'flex';
-                initGame();
+
+                // Check if user already chose a character before
+                db.collection('users').doc(currentUserUid).get().then(doc => {
+                    const data = doc.data();
+                    if (data && data.gender) {
+                        // Directly enter game if character is already chosen
+                        startMapGame();
+                    } else {
+                        // Show storyline & selection screen first time
+                        document.getElementById('story-screen').style.display = 'block';
+                    }
+                });
             }
         });
 
-        function initGame() {
+        async function confirmCharacterSelection() {
+            await db.collection('users').doc(currentUserUid).update({
+                gender: selectedGender
+            });
+            document.getElementById('story-screen').style.display = 'none';
+            startMapGame();
+        }
+
+        function startMapGame() {
+            document.getElementById('game-screen').style.display = 'flex';
+            
             db.collection('users').doc(currentUserUid).onSnapshot(doc => {
                 currentPlayerData = doc.data();
                 document.getElementById('display-name').innerText = currentPlayerData.username;
@@ -227,19 +262,21 @@
                 ctx.fillText(s.name, s.x + 5, s.y - 5);
             });
 
-            // Draw Other Players with 2D Sprite Images
+            // Draw Other Players
             for (let id in otherPlayers) {
                 let p = otherPlayers[id];
-                let imgToDraw = p.gender === 'Boy' ? boyImg : girlImg;
-                ctx.drawImage(imgToDraw, p.x, p.y, player.size, player.size);
-                
-                ctx.fillStyle = "white";
-                ctx.font = "bold 12px sans-serif";
-                ctx.fillText(p.username, p.x - 5, p.y - 5);
+                if (p.gender) {
+                    let imgToDraw = p.gender === 'Boy' ? boyImg : girlImg;
+                    ctx.drawImage(imgToDraw, p.x, p.y, player.size, player.size);
+                    
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 12px sans-serif";
+                    ctx.fillText(p.username, p.x - 5, p.y - 5);
+                }
             }
 
-            // Draw Own Player with 2D Sprite Image
-            if (currentPlayerData) {
+            // Draw Own Player
+            if (currentPlayerData && currentPlayerData.gender) {
                 let myImg = currentPlayerData.gender === 'Boy' ? boyImg : girlImg;
                 ctx.drawImage(myImg, player.x, player.y, player.size, player.size);
                 
